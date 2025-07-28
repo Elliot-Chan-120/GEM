@@ -3,7 +3,7 @@
 - developed by: Elliot Chan
 - contact: elliotchan120@gmail.com
 
-> A sophisticated ML-enhanced end-to-end variant pathogenicity prediction and repair system.
+> A sophisticated ML-enhanced end-to-end gene variant pathogenicity prediction and repair system.
 > Aiming to accelerate gene variant classification and gene therapy target identification via intelligent, guided mutations.
 
 

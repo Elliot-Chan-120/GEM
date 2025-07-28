@@ -55,7 +55,7 @@ class LookingGlass:
         return variant_df
 
 
-    def run_model(self, optimal_threshold=self.cfg['optimal_threshold']):
+    def run_model(self):
         mutation_fingerprint = self.DNA_fingerprint()
 
         mutation_fingerprint = mutation_fingerprint.loc[:, ~mutation_fingerprint.columns.duplicated()]
@@ -63,7 +63,7 @@ class LookingGlass:
         mutation_fingerprint = mutation_fingerprint.drop(['ClinicalSignificance', 'Name'], axis=1)
 
         results = self.model.predict_proba(mutation_fingerprint)
-        predictions = (results[:, 1] >= optimal_threshold).astype(int)
+        predictions = (results[:, 1] >= self.cfg['optimal_threshold']).astype(int)
         result_df = pd.DataFrame({
             'Predicted_Class': predictions,
             'Prob_Benign': results[:, 0],

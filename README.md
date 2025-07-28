@@ -1,5 +1,5 @@
-## GEM
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&size=18&duration=2000&pause=2000&color=8FBCBB&multiline=true&width=370&height=30&lines=Benign+by+Design)](https://git.io/typing-svg)
+# GEM
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&color=5E81AC&width=435&height=40&lines=Benign+by+Design)](https://git.io/typing-svg)
 - developed by: Elliot Chan
 - contact: elliotchan120@gmail.com
 
@@ -89,29 +89,30 @@ It includes:
 
 
 ## [1.1] Design Rationale
-*Why XGB*
+### Why XGB
 XGB models were chosen due to being tree-based and faring well under non-linear high-dimensional data. I found them to be faster to train than RandomForest, speaking from (hours of) experience.
 
-*Context Matters*
+### Context Matters 
 The problem with ClinVar's data on its own is that for a project like this, the ref and alt allele vcfs (variant sequences) alone are not sufficient to make accurate predictions of pathogenicity.
 Surrounding context is highly significant in understanding the impact a mutation has. One simple insertion / deletion can shift a reading frame and drastically alter the resulting protein.
 Therefore, cross-referencing ClinVar variant location data with GCF assembly and complete FASTA to obtain a configurable amount of flanking context sequences was the optimal choice. 
 
-*Protein Analysis Strategy*
+### Protein Analysis Strategy 
 Protein analysis was a big hurdle, as I had find a way to balance processing power with biological accuracy. For every string of DNA (above a certain size), there are 6 ways to read and translate proteins from it, along what we call Open Reading Frames.
 Naive approaches would involve brute-force scanning of all 6 reading frames, then scanning all possible ORFs, extracting all sequences, then conducting analyses on all of them then doing that again for variant comparison.
-For 370k+ sequences of minimum length 1001 base pairs, this would nuke my computer. The solution to this would be to preprocess the entire sequence, scanning for start and stop codons. 
+For 370k+ sequences of minimum length 1001 base pairs, this would nuke my computer. The solution to this would be to preprocess the entire sequence, scanning for start and stop codons.
+
 Valid potential reading frames that started and ended with valid start and stop codons and had no in-frame stop codons inside were then saved, then scanned for a Kozak motif.
 A Kozak motif generally looks like this (gccA/Gcc[AUG]G) around the [start codon] ATG / AUG (mRNA), where the capital letters represent the most important positions, is a powerful predictor of translation initiation. In other words, if you find it, there is a high chance protein translation will initiate immediately after.
 Generally, the largest ORF is the one that will encode the protein. By searching for the Kozak motif and getting the length of all potential ORFs, we can generate a score for each, where the highest-scoring ORF is one we can safely assume will encode the protein.
 
-*Flexible Multiprocessing*
+### Flexible Multiprocessing
 Both CompositeDNA and CompositeProt were optimized with multiprocessing, by initializing a multiprocessing pool upon class instantiation, terminating automatically when under a context manager (with xyz as CompositeDNA/Prot(core_num=max_cores-2)).
 This sped up protein analysis time from a predicted 8-9 hours to 1:50.
 What makes them flexible is that pool persistence is encoded into them, allowing for them to be loaded up once, and many dataframes passed onto them for analysis, then terminated at will rather than automatically via a context manager. 
 This saved an immense amount of overhead in ReGen, as dataframes would be altered then rerun through their fingerprinting pipelines.
 
-*ReGen's Adaptive Logic*
+### ReGen's Adaptive Logic
 A look at the config file or ReGen's logic will reveal a "retain_counter". What this is for is to keep track of the amount of times a mutation did not result in an increase in benignity. 
 Once this passes a config-defined threshold (retain_threshold), the variant will undergo a certain amount of random mutations, and the highest-scoring one is allowed to pass on under a more lenient error threshold.
 The threshold decreases as retain-count increases, becoming more lenient the more the variant demonstrates ridigity. This, combined with the stochastic mutations is designed to break through plateaus in performance, finding the mutation route around it.
@@ -344,7 +345,7 @@ protein_gap_penalty: -8
   - pyfaidx
   
   
-References:
+## References:
 - Chromosome densities:
   - https://www.cshlp.org/ghg5_all/section/dna.shtml#:~:text=Gene%20density%20varies%20greatly%20among,x-axis%20of%20the%20figure.
 - Nearest-neighbour thermodynamic parameters:

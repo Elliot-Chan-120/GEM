@@ -103,7 +103,7 @@ Naive approaches would involve brute-force scanning of all 6 reading frames, the
 For 370k+ sequences of minimum length 1001 base pairs, this would nuke my computer. The solution to this would be to preprocess the entire sequence, scanning for start and stop codons.
 
 Valid potential reading frames that started and ended with valid start and stop codons and had no in-frame stop codons inside were then saved, then scanned for a Kozak motif.
-A Kozak motif generally looks like this (gccA/Gcc[AUG]G) around the [start codon] ATG / AUG (mRNA), where the capital letters represent the most important positions, is a powerful predictor of translation initiation. In other words, if you find it, there is a high chance protein translation will initiate immediately after.
+A Kozak motif generally looks like this (gccA/Gcc[AUG]G) around the [start codon] ATG / AUG (mRNA), where the capital letters represent the most important positions. It is a powerful predictor of translation initiation, so if you find it, there is a high chance protein translation will initiate immediately after.
 Generally, the largest ORF is the one that will encode the protein. By searching for the Kozak motif and getting the length of all potential ORFs, we can generate a score for each, where the highest-scoring ORF is one we can safely assume will encode the protein.
 
 ### Flexible Multiprocessing

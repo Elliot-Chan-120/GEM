@@ -38,7 +38,7 @@ It includes:
 
 *Conducts thorough DNA analyses to build a numerical profile on the following features:*
 - Sequence Alignment and Comparison
-  - Needleman-Wunsch global alignment, Smith-Waterman local alignment, & Sequence identity and coverage metrics
+  - Needleman-Wunsch global alignment, Smith-Waterman local alignment, Sequence identity and Coverage metrics
 - Structural Analysis
   - Thermodynamic stability analysis using nearest-neighbour parameters
   - GC content and CpG island disruption analysis 

@@ -1,0 +1,84 @@
+# ==================================
+# Navigation
+# ==================================
+
+model_folder: 'model_folder'
+database_folder: 'database'
+gene_databank: 'gene_databank'
+screen_predictions: 'Screen_results'
+
+# DATABASE FILES
+clinvar_data: variant_summary.txt.gz
+GRCh38_gz: GCF_000001405.40_GRCh38.p14_genomic.fna.gz
+GRCh38_txt: GCF_000001405.40_GRCh38.p14_assembly_report.txt
+GRCh38_fna: GCF_000001405.29_GRCh38.p14_genomic.fna
+
+# USER GENERATED FILES FOR ML TRAINING
+ref_alt_df: REF_ALT_df
+context_df: CONTEXT_ref_alt_df
+full_variant_df: VARIANT_df
+
+
+# ==================================
+# DataFrame generation settings
+# ==================================
+# context / flanksize settings -> determines how much of the full sequence you want added on to each variant
+flank_size: 500
+
+# [Variant window search extensions]
+DNA_buffer_region: 100
+# enlarges window beyond variant where motifs and certain secondary structures / mutations will be searched
+# must be smaller than flank size
+
+AA_buffer_region: 300
+# enlarges window beyond variant where protein sequences will be analyzed
+# must be smaller than flank size
+
+
+# ========================================
+# Mutation Profile Fingerprinting Settings
+# ========================================
+
+# [DNA similarity matrix scores]
+match: 1
+mismatch: -1
+
+# [K-mer size limits]
+k_min: 2  # size limits on possible kmers
+k_max: 7
+
+# [Ambiguous string generation number]
+variant_num: 3  # how many DNA variants we are willing to consider for ambiguous sequences
+
+# [Functional Consequence Settings]
+splice_site_window: 8
+motif_window: 4
+
+# [DNA repeat settings]
+min_repeat_length: 2  # minimum size of repeat subsequences
+max_repeat_length: 10
+min_repeats: 5  # minimum times a subseq is repeated for its region to be considered a microsatellite
+
+# [Protein settings]
+protein_substitution_matrix: "blosum62.mat"
+minimum_protein_length: 10
+protein_gap_penalty: -8
+
+
+# ==================================
+# LookingGlass Settings
+# ==================================
+optimal_threshold: 0.459  # this is your trained model's optimal threshold, it is output at the end of model training
+
+# ==================================
+# Regen Settings
+# ==================================
+n_iterations: 50
+n_copies: 1
+decrease_threshold: -0.005
+retain_threshold: 3
+benign_goal: 0.75   # what % chance we want our resulting alleles to be Benign
+scale_factor: 0.1
+
+
+

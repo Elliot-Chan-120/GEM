@@ -13,7 +13,7 @@ What makes this a GEM?
 - integrates ClinVar and GRCh38 human genome assembly data to build detailed, context-inclusive sequences
 - uses biochemical data and research-backed feature extraction at both the DNA and protein level
 - trains optimized XGBoost models to classify benign and pathogenic mutation variants
-- suggests guided edits to increase the reduce variant pathogenicity
+- suggests guided edits to reduce variant pathogenicity
 
 It includes:
 - *LookingGlass*: Variant classifier based on custom FASTA inputs

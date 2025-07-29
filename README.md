@@ -102,41 +102,46 @@ Surrounding context is highly significant in understanding the impact a mutation
 Therefore, cross-referencing ClinVar variant location data with GCF assembly and complete FASTA to obtain a configurable amount of flanking context sequences was the optimal choice. 
 
 ### Protein Analysis Strategy 
-Protein analysis was a big hurdle, as I had find a way to balance processing power with biological accuracy. For every string of DNA (above a certain size), there are 6 ways to read and translate proteins from it, along what we call Open Reading Frames.
-Naive approaches would involve brute-force scanning of all 6 reading frames, then scanning all possible ORFs, extracting all sequences, then conducting analyses on all of them then doing that again for variant comparison.
-For 370k+ sequences of minimum length 1001 base pairs, this would nuke my computer. The solution to this would be to preprocess the entire sequence, scanning for start and stop codons.
+Protein analysis was a big hurdle, as I had find a way to balance processing power with biological accuracy. For every string of DNA (above a certain size), there are 6 ways to read and translate proteins from it, along what we call Reading Frames. Each reading frame usually contains multple Open Reading Frames (ORFs), characterized by start and stop codons, which is where the proteins actually get made.
+Naive approaches to analyzing the protein level would involve brute-force scanning of all 6 reading frames, then scanning for all possible ORFs, extracting all sequences, then conducting analyses on all of them then doing that again for variant comparison. So there's 6 RFs, most likely multiple ORFs in each, and we probably have to compare the average of those results between 2 sequences 380k+ times. This would, at best, nuke my computer. The solution to this would be to preprocess the entire sequence first, then determine its protein translation efficiency.
 
-Valid potential reading frames that started and ended with valid start and stop codons and had no in-frame stop codons inside were then saved, then scanned for a Kozak motif.
-A Kozak motif generally looks like this (gccA/Gcc[AUG]G) around the [start codon] ATG / AUG (mRNA), where the capital letters represent the most important positions. It is a powerful predictor of translation initiation, so if you find it, there is a high chance protein translation will initiate immediately after.
-Generally, the largest ORF is the one that will encode the protein. By searching for the Kozak motif and getting the length of all potential ORFs, we can generate a score for each, where the highest-scoring ORF is one we can safely assume will encode the protein.
+I started off with scanning for start and stop codons, tracking the positions where they appeared. Valid potential reading frames that started and ended with in-frame start and stop codons (% 3 == 0) and had no in-frame stop codons inside were saved, then scanned for a Kozak motif. A Kozak motif generally looks like this "gccA/Gcc[AUG]G" around the [start codon] ATG / AUG (mRNA), where the capital letters represent the most important positions. It is a powerful predictor of translation initiation, so if you find it, there is a high chance protein translation will initiate immediately after. Generally, the largest ORF is the one that will encode the protein. By searching for the Kozak motif and getting the length of all potential ORFs, we can generate a score for each, where the highest-scoring ORF is one we can safely assume will encode the protein.
 
 ### Flexible Multiprocessing
 Both CompositeDNA and CompositeProt were optimized with multiprocessing by initializing a multiprocessing pool upon class instantiation, terminating automatically when under a context manager (with xyz as CompositeDNA/Prot(core_num=max_cores-2)).
-This sped up protein analysis time from a predicted 8-9 hours to 1:50.
+This sped up protein analysis time from a predicted 8-9 hours to 1:30.
 What makes them flexible is that pool persistence is encoded into them, allowing for them to be loaded up once, many dataframes passed onto them for analysis, then terminated at will rather than automatically via a context manager. 
-This saved an immense amount of overhead in ReGen, as dataframes would be altered then rerun through their fingerprinting pipelines.
+This saved an immense amount of overhead in ReGen, where strings were constantly being altered and rerun through their fingerprinting pipelines for repeated predictions.
 
 ### ReGen's Adaptive Logic
 A look at the config file or ReGen's logic will reveal a "retain_counter". What this is for is to keep track of the amount of times a mutation did not result in an increase in benignity. 
 Once this passes a config-defined threshold (retain_threshold), the variant will undergo a certain amount of random mutations, and the highest-scoring one is allowed to pass on under a more lenient error threshold.
-The threshold decreases as retain-count increases, becoming more lenient the more the variant demonstrates ridigity. This, combined with the stochastic mutations is designed to break through plateaus in performance, finding the mutation route around it.
+The threshold decreases as retain-count increases, becoming more lenient the more the variant demonstrates ridigity. This, combined with the stochastic mutations is designed to break through plateaus in performance, finding the mutation route around it. I would recommend setting this to 1, but you can leave it at 3 to see how it works once a plateau is hit.
 
 
-## [2] Workflow
+## [2] Installation and Workflow
+### *Installation and Setup*
+- Go to the Releases Tab on the right hand side of this GitHub page
+- Download the latest release as a .zip file
+- Unzip the file on your computer
+- Open/Load up the folder using your preferred Python IDE (PyCharm, VSCode, or others)
+
+Now you're ready to set up the project's database.
+
 First, you're going to need to download ClinVar's variant data from the link below.
-- Go to: https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/ then click on "variant_summary.txt.gz"
+- Go to https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/ then click on "variant_summary.txt.gz"
 
-Then, you're going to download the GCF GRCh38 human genome assembly file as well as its assembly report
-- Go to: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/
-
-Then download the following:
+Then, you're going to download the GCF GRCh38 human genome assembly file as well as its assembly report.
+- Go to https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/ then download the following:
 - GCF_000001405.40_GRCh38.p14_genomic.fna.gz
 - GCF_000001405.40_GRCh38.p14_assembly_report.txt
 
 Move all of those into the 'database' folder. Now we are ready to do your first run. 
 
-All of this can be run from 00_main.py.
 
+### *Workflow*
+
+All of this is on 00_main.py.
 ```python
 from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass

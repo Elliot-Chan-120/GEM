@@ -125,6 +125,7 @@ The threshold decreases as retain-count increases, becoming more lenient the mor
 - Download the latest release as a .zip file
 - Unzip the file on your computer
 - Open/Load up the folder using your preferred Python IDE (PyCharm, VSCode, or others)
+- In your python terminal, type in "pip install" followed by the list of required packages in the Prerequisites and Dependencies section of this README.md
 
 Now you're ready to set up the project's database.
 

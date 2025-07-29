@@ -1,7 +1,7 @@
 # GEM
 [![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&pause=1000&color=5E81AC&width=435&height=40&lines=Benign+by+Design)](https://git.io/typing-svg)
 - developed by: Elliot Chan
-- contact: elliotchan120@gmail.com
+- contact: elliotchan119@gmail.com
 
 > A sophisticated ML-enhanced end-to-end gene variant pathogenicity prediction and repair system.
 > Aiming to accelerate gene variant classification and gene therapy target identification via intelligent, guided mutations.

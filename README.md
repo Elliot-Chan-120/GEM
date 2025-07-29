@@ -48,7 +48,7 @@ It includes:
 - Mutation Detection
   - SNV (Single Nucleotide Variant) identification
   - Insertion / Deletion analysis with frameshift detection
-  - Tandom duplication discovery
+  - Tandem duplication discovery
 - Regulatory Element Analysis
   - Transcription factor motif disruptions
   - DNA instability motif analysis
@@ -107,9 +107,9 @@ A Kozak motif generally looks like this (gccA/Gcc[AUG]G) around the [start codon
 Generally, the largest ORF is the one that will encode the protein. By searching for the Kozak motif and getting the length of all potential ORFs, we can generate a score for each, where the highest-scoring ORF is one we can safely assume will encode the protein.
 
 ### Flexible Multiprocessing
-Both CompositeDNA and CompositeProt were optimized with multiprocessing, by initializing a multiprocessing pool upon class instantiation, terminating automatically when under a context manager (with xyz as CompositeDNA/Prot(core_num=max_cores-2)).
+Both CompositeDNA and CompositeProt were optimized with multiprocessing by initializing a multiprocessing pool upon class instantiation, terminating automatically when under a context manager (with xyz as CompositeDNA/Prot(core_num=max_cores-2)).
 This sped up protein analysis time from a predicted 8-9 hours to 1:50.
-What makes them flexible is that pool persistence is encoded into them, allowing for them to be loaded up once, and many dataframes passed onto them for analysis, then terminated at will rather than automatically via a context manager. 
+What makes them flexible is that pool persistence is encoded into them, allowing for them to be loaded up once, many dataframes passed onto them for analysis, then terminated at will rather than automatically via a context manager. 
 This saved an immense amount of overhead in ReGen, as dataframes would be altered then rerun through their fingerprinting pipelines.
 
 ### ReGen's Adaptive Logic

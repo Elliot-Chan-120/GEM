@@ -40,11 +40,14 @@ It includes:
 - Sequence Alignment and Comparison
   - Needleman-Wunsch global alignment, Smith-Waterman local alignment, Sequence identity and Coverage metrics
 - Structural Analysis
+  - Chromosome density
+  - Length changes
   - Thermodynamic stability analysis using nearest-neighbour parameters
   - GC content and CpG island disruption analysis 
   - Shannon entropy for sequence complexity
   - Hairpin structure prediction
   - Microsatellite detection
+  - Intron detections
 - Mutation Detection
   - SNV (Single Nucleotide Variant) identification
   - Insertion / Deletion analysis with frameshift detection
@@ -67,13 +70,14 @@ It includes:
   - Molecular weight calculations
   - Net charge at physiological pH
   - Isoelectric point determination
+  - Hydrophobicity changes
   - Aliphatic index
   - Protein half-life predictions
 - Structural Analysis
   - Secondary structure propensity analysis (BioPython-aided)
   - Proline content assessment
   - Global and local protein sequence alignment with BLOSUM64 matrix
-- Feature Interaction Engineering
+- Feature Interaction Engineering includes:
   - Composite scores combining multiple properties
   - Interaction terms (e.g. charge-hydrophobicity)
   - Relative metrics normalized by protein length

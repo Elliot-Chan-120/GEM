@@ -1,0 +1,20 @@
+Optimal Hyperparameters: {'n_estimators': 1936, 'max_depth': 10, 'learning_rate': 0.041977875319094894, 'subsample': 0.8691093047813849, 'colsample_bytree': 0.9973783186852718, 'reg_alpha': 0.20907871533405323, 'reg_lambda': 1.6124970064334614, 'gamma': 0.35865668074613577, 'scale_pos_weight': 1.8996291716997067}
+Cross Validation Results: Mean ROC AUC: 0.8744, Mean PR AUC: 0.8684
+Mean FNs: 5601.00, Mean FPs: 6627.00
+ROC AUC: 0.8783
+Precision-Recall AUC: 0.8739
+Pathogenic F1-Score: 0.7885
+Optimal threshold for pathogenic detection: 0.513
+Performance with optimal threshold:
+              precision    recall  f1-score   support
+
+           0       0.83      0.81      0.82     41774
+           1       0.78      0.80      0.79     34814
+
+    accuracy                           0.81     76588
+   macro avg       0.80      0.81      0.80     76588
+weighted avg       0.81      0.81      0.81     76588
+
+Confusion Matrix:
+[[33884  7890]
+ [ 6987 27827]]

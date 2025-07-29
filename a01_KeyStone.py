@@ -240,17 +240,18 @@ class KeyStone:
                                                             random_state=42)
 
         # == Hyperparameter Optimization ==
-        # note: I did this already, took 1 hour 50 minutes to find optimal hyperparameters
         # class_counts = y.value_counts()
         # scale_pos_weight = class_counts[0] / class_counts[1]
         # study = optuna.create_study(direction='maximize')
         # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=100)
         # best_params = study.best_params
 
-        best_params = {'n_estimators': 1716, 'max_depth': 10, 'learning_rate': 0.027137066985558365,
-                       'subsample': 0.7473838198836186, 'colsample_bytree': 0.9174205784025309,
-                       'reg_alpha': 0.18640493452448254, 'reg_lambda': 0.03349387723357219,
-                       'gamma': 0.27743791475158897, 'scale_pos_weight': 1.4228361217194654}
+        # I did that already, took two hours
+
+        best_params = {'n_estimators': 1936, 'max_depth': 10, 'learning_rate': 0.041977875319094894,
+                       'subsample': 0.8691093047813849, 'colsample_bytree': 0.9973783186852718,
+                       'reg_alpha': 0.20907871533405323, 'reg_lambda': 1.6124970064334614,
+                       'gamma': 0.35865668074613577, 'scale_pos_weight': 1.8996291716997067}
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
 

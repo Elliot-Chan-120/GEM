@@ -138,14 +138,11 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-# Note -> when making this project there were 376882 variants acquired from ClinVar but that has since increased. 
-# I will rerun the pipeline with up-to date information and hyperparameters.
-
 # Parse and filter for high-confidence data on Benign and Pathogenic variants from ClinVar
 # Unzips human genome file, and uses the assembly report to help cross-reference variant locations
 # Using the parsed locations, acquires flanking regions of configurable bps (default = 500bp)
 # Neatly formats everything into a dataframe for downstream operations
-def keystone_p1_demo(ml_modelname='ReGen_v1'):
+def keystone_p1_demo(ml_modelname='ReGen_v2'):
     test = KeyStone(ml_modelname)
     test.naive_dataframe()
     test.decompress_genome()
@@ -153,7 +150,7 @@ def keystone_p1_demo(ml_modelname='ReGen_v1'):
 
     
 # With the previously built dataframe, runs the DNA and Protein Analysis toolkits on them to generate mutation profile dataframe
-def keystone_p2_demo(ml_modelname='ReGen_v1'):
+def keystone_p2_demo(ml_modelname='ReGen_v2'):
     # this process takes around 1:50 minutes generally depending on background tasks
     # [Generating DNA mutation fingerprints]: 100%|██████████| 378862/378862 [13:19<00:00, 473.69it/s]
     # [Generating AA chain mutation fingerprints]: 100%|██████████| 378862/378862 [1:30:27<00:00, 69.81it/s]
@@ -170,54 +167,54 @@ def keystone_p2_demo(ml_modelname='ReGen_v1'):
 
 
 # Initializes an XGB model and optimizes its hyperparameters with Optuna
-def keystone_p3_demo(ml_modelname='ReGen_v1'):
+def keystone_p3_demo(ml_modelname='ReGen_v2'):
     test = KeyStone(ml_modelname)
     test.train_models()
 
 
 # When provided with a correctly-formatted special FASTA file (example provided in gene_databank folder), will classify each variant as benign or pathogenic
-def LookingGlass_Demo(fasta_filename='test_fasta', ml_model='ReGen_v1', output_filename='Screen_test_1'):
+def LookingGlass_Demo(fasta_filename='test_fasta', ml_model='ReGen_v2', output_filename='Screen_test_1'):
     test_module = LookingGlass(fasta_filename, ml_model)
     if __name__ == "__main__":
         test_module.predict_file(output_filename)
 
 
 # Utilizes an intelligent sequence of guided mutations and plateau-breaking stochastic mutations to optimize variants towards benign classification
-def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model='ReGen_v1', outfile_name='benchmark_repair_test'):
+def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model='ReGen_v2', outfile_name='benchmark_repair_test'):
     if __name__ == "__main__":
         module = ReGen(pathogenic_gene_file, ml_model, outfile_name)
         module.repair()
 ```
 
 
-## [2.1] Current Model Stats - ReGen_v1
+## [2.1] Current Model Stats - ReGen_v2
 ```
-Model: ReGen_v1
+Model: ReGen_v2
 
-Optimal Hyperparameters: {'n_estimators': 1716, 'max_depth': 10, 'learning_rate': 0.027137066985558365, 'subsample': 0.7473838198836186, 'colsample_bytree': 0.9174205784025309, 'reg_alpha': 0.18640493452448254, 'reg_lambda': 0.03349387723357219, 'gamma': 0.27743791475158897, 'scale_pos_weight': 1.4228361217194654}
-Cross Validation Results: Mean ROC AUC: 0.8744, Mean PR AUC: 0.8665
-Mean FNs: 5586.80, Mean FPs: 6481.40
-ROC AUC: 0.8754
-Precision-Recall AUC: 0.8676
-Pathogenic F1-Score: 0.7810
-Optimal threshold for pathogenic detection: 0.459
+Optimal Hyperparameters: {'n_estimators': 1936, 'max_depth': 10, 'learning_rate': 0.041977875319094894, 'subsample': 0.8691093047813849, 'colsample_bytree': 0.9973783186852718, 'reg_alpha': 0.20907871533405323, 'reg_lambda': 1.6124970064334614, 'gamma': 0.35865668074613577, 'scale_pos_weight': 1.8996291716997067}
+Cross Validation Results: Mean ROC AUC: 0.8744, Mean PR AUC: 0.8684
+Mean FNs: 5601.00, Mean FPs: 6627.00
+ROC AUC: 0.8783
+Precision-Recall AUC: 0.8739
+Pathogenic F1-Score: 0.7885
+Optimal threshold for pathogenic detection: 0.513
 Performance with optimal threshold:
               precision    recall  f1-score   support
 
-           0       0.83      0.81      0.82     41771   Benign
-           1       0.77      0.79      0.78     34002   Pathogenic
+           0       0.83      0.81      0.82     41774
+           1       0.78      0.80      0.79     34814
 
-    accuracy                           0.80     75773
-   macro avg       0.80      0.80      0.80     75773
-weighted avg       0.80      0.80      0.80     75773
+    accuracy                           0.81     76588
+   macro avg       0.80      0.81      0.80     76588
+weighted avg       0.81      0.81      0.81     76588
 
 Confusion Matrix:
-[[33685  8086]
- [ 7007 26995]]
+[[33884  7890]
+ [ 6987 27827]]
 ```
 
 
-## [3] LookingGlass test FASTA Input and Results
+## [3] LookingGlass example FASTA Input and Results
 
 Users must provide FASTA sequences in this format to gene_databank:
 ```
@@ -248,7 +245,7 @@ benchmarkgene1,1,0.0025193095,0.9974807
 benchmarkgene2,1,0.0074431896,0.9925568
 ```
 
-## ReGen test Input and Results
+## ReGen example Input and Results
 Note: Users need to insert a FASTA file of the same custom format in the ReGen_input folder
 ```
 ================================================================================

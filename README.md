@@ -228,13 +228,13 @@ Confusion Matrix:
 
 Users must provide FASTA sequences in this format to gene_databank:
 ```
+>chr'X'| ref / alt / flank1 / flank2 | gene_name
+
 Remember that flanking context sequences (ideally 500bp) must be provided
 If flanking sequences are under 500, nothing's going to break, but the lack of context will most likely bottleneck the model's prediction power.
 
 BenchmarkGene1 is the first pathogenic gene variant in our dataset: ID NC_000007.14
 I have trimmed it down for this README.md, the full sequence is in the file
-
->chr'X'| ref / alt / flank1 / flank2 | gene_name
 
 >chr9|ref|BenchmarkGene1
 GCTGCTGGACCTGCC

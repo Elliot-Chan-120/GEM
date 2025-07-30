@@ -259,6 +259,10 @@ benchmarkgene2,1,0.0022346973,0.9977653
 ## ReGen example Input and Results
 Note: Users need to insert a FASTA file of the same custom format in the ReGen_input folder
 ```
+================================================================================
+ReGen Analysis Results: ReGen_v2 | benchmark_fasta | benchmarkgene1
+================================================================================
+
 ORIGINAL VARIANT STATS: 
 Ref Sequence: GCTGCTGGACCTGCC
 Alt Sequence: G
@@ -268,7 +272,7 @@ ANALYSIS SUMMARY:
 |- Starting Score: 0.032901
 |- Original Length: 15 bp
 |- Final Variants: 1
-|- Benign Threshold Variants: 4
+|- Benign Threshold Variants: 9
 |- ReGen config: 50 iterations, 1 copies
 
 MAX BENIGN VARIANTS PER ITERATION:

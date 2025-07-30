@@ -3,7 +3,8 @@ ReGen Analysis Results: ReGen_v2 | benchmark_fasta | benchmarkgene1
 ================================================================================
 
 ORIGINAL VARIANT STATS: 
-Sequence: GCTGCTGGACCTGCC
+Ref Sequence: GCTGCTGGACCTGCC
+Alt Sequence: G
 Benign % chance: 3.290087
 
 ANALYSIS SUMMARY:
@@ -75,6 +76,26 @@ Benign % increase: 85.24704575538635
    Sequence:
     GTC
 
+Score: 79.46057319641113 | Length: 6 bp
+Benign % increase: 76.17048621177673
+   Sequence:
+    GTCGTC
+
+Score: 79.46057319641113 | Length: 6 bp
+Benign % increase: 76.17048621177673
+   Sequence:
+    GTCGTC
+
+Score: 88.53713274002075 | Length: 3 bp
+Benign % increase: 85.24704575538635
+   Sequence:
+    GTC
+
+Score: 88.53713274002075 | Length: 3 bp
+Benign % increase: 85.24704575538635
+   Sequence:
+    GTC
+
 Score: 88.53713274002075 | Length: 3 bp
 Benign % increase: 85.24704575538635
    Sequence:
@@ -185,10 +206,15 @@ Benign % increase: 85.24704575538635
    Sequence:
     GTC
 
-Score: 88.53713274002075 | Length: 3 bp
-Benign % increase: 85.24704575538635
+Score: 79.46057319641113 | Length: 6 bp
+Benign % increase: 76.17048621177673
    Sequence:
-    GTC
+    GTCGTC
+
+Score: 79.46057319641113 | Length: 6 bp
+Benign % increase: 76.17048621177673
+   Sequence:
+    GTCGTC
 
 Score: 88.53713274002075 | Length: 3 bp
 Benign % increase: 85.24704575538635
@@ -239,31 +265,6 @@ Score: 88.53713274002075 | Length: 3 bp
 Benign % increase: 85.24704575538635
    Sequence:
     GTC
-
-Score: 88.53713274002075 | Length: 3 bp
-Benign % increase: 85.24704575538635
-   Sequence:
-    GTC
-
-Score: 78.1769871711731 | Length: 6 bp
-Benign % increase: 74.8869001865387
-   Sequence:
-    GTCATC
-
-Score: 78.1769871711731 | Length: 6 bp
-Benign % increase: 74.8869001865387
-   Sequence:
-    GTCATC
-
-Score: 91.5849506855011 | Length: 3 bp
-Benign % increase: 88.2948637008667
-   Sequence:
-    ATC
-
-Score: 91.5849506855011 | Length: 3 bp
-Benign % increase: 88.2948637008667
-   Sequence:
-    ATC
 
 BENIGN THRESHOLD VARIANTS:
 --------------------------------------------------
@@ -277,19 +278,19 @@ Benign % increase: 76.17048621177673
    Sequence:
     GTCGTC
 
-Score: 79.46057319641113 | Length: 6 bp
-Benign % increase: 76.17048621177673
+Score: 76.32622122764587 | Length: 6 bp
+Benign % increase: 73.03613424301147
    Sequence:
-    GTCGTC
+    GTCATA
 
-Score: 80.94335794448853 | Length: 6 bp
-Benign % increase: 77.65327095985413
+Score: 78.1769871711731 | Length: 6 bp
+Benign % increase: 74.8869001865387
    Sequence:
-    ATCGTA
+    GTCATC
 
 FINAL VARIANTS:
 --------------------------------------------------
-Score: 91.5849506855011 | Length: 3 bp
-Benign % increase: 88.2948637008667   Sequence: 
-    ATC
+Score: 88.53713274002075 | Length: 3 bp
+Benign % increase: 85.24704575538635   Sequence: 
+    GTC
 

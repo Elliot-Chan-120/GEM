@@ -75,8 +75,9 @@ optimal_threshold: 0.513  # this is your trained model's optimal threshold, it i
 # ==================================
 n_iterations: 50
 n_copies: 1
-decrease_threshold: -0.05
+decrease_threshold: -0.1
 retain_threshold: 1
+random_choices: 40
 benign_goal: 0.75   # what % chance we want our resulting alleles to be Benign
 scale_factor: 0.1
 

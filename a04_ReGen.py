@@ -42,6 +42,7 @@ class ReGen:
         self.n_iterations = self.cfg['n_iterations']
         self.n_copies = self.cfg['n_copies']
         self.retain_threshold = self.cfg['retain_threshold']
+        self.random_choices = self.cfg['random_choices']
         self.benign_threshold = self.cfg['benign_goal']
         self.error_threshold = self.cfg['decrease_threshold']
         self.scale_factor = self.cfg['scale_factor']
@@ -79,6 +80,8 @@ class ReGen:
 
         max_benign_batch_genes = []
         threshold_genes = []
+
+        seen_sequences = set()
 
         # ====[[ REPAIR LOOP ]]====
         # for n_iterations, mutate all previous genes and put them into new gene
@@ -120,18 +123,22 @@ class ReGen:
                         new_genes.append(gene)
                         new_scores.append(score)
                         print("No improvement, keeping score")
+                        print(f"index: {idx}")
+                        print(f"score: {new_score}")
                     else:
                         retain_counter[idx] = 0
                         new_genes.append(new_gene)
                         new_scores.append(new_score)
+                        print(f"index: {idx}")
+                        print(f"score: {new_score}")
 
-                    # if any genes have passed the benign threshold, add them to the list
-                    if new_score > self.benign_threshold:
+                # if any genes have passed the benign threshold, add them to the list
+                if new_score > self.benign_threshold:
+                    string = new_gene['AlternateAlleleVCF']
+                    if string not in seen_sequences:
                         threshold_genes.append((new_gene, new_score))
+                        seen_sequences.add(string)
 
-                    print(f"index: {idx}")
-                    print(f"score: {new_score}")
-                    print(f"retain counter: {retain_counter[idx]}")
 
             # move new genes into current for comparison in next iteration
             current_genes = pd.DataFrame(new_genes).reset_index(drop=True)
@@ -140,6 +147,7 @@ class ReGen:
             # take most benign gene from this iteration and save it
             max_idx = current_scores.idxmax()
             max_benign_batch_genes.append((current_genes.iloc[max_idx], current_scores[max_idx]))
+
 
         last_variants = current_genes.copy()
         last_variants['Scores'] = current_scores
@@ -196,13 +204,13 @@ class ReGen:
         if len(variant) <= 3:
             candidate_genes = []
             # if it's too small, it has to undergo a random addition mutation
-            for idx in range(10):
+            for idx in range(self.random_choices):
                 new_gene = gene_var.copy()
                 new_gene['AlternateAlleleVCF'] = variant + random.choice(self.nt_database)
                 candidate_genes.append(new_gene)
         else:
             candidate_genes = []
-            for idx in range(10):
+            for idx in range(self.random_choices):
                 new_gene = gene_var.copy()
                 nt_size = random.randint(1, min(3, len(variant) - 1))
                 pos = random.randint(0, len(variant) - nt_size)
@@ -237,6 +245,7 @@ class ReGen:
         export_data = {
             'starting_score': start_score,
             'original_allele': initial_allele['ReferenceAlleleVCF'],
+            'alternate_allele': initial_allele['AlternateAlleleVCF'],
             'Flank_1': initial_allele['Flank_1'],
             'Flank_2': initial_allele['Flank_2'],
             'final_variants': [],
@@ -298,7 +307,8 @@ class ReGen:
 
         # Original Variant and Benign probability
         content += "ORIGINAL VARIANT STATS: \n"
-        content += f"Sequence: {export_data['original_allele']}\n"
+        content += f"Ref Sequence: {export_data['original_allele']}\n"
+        content += f"Alt Sequence: {export_data['alternate_allele']}\n"
         content += f"Benign % chance: {starting_pct:.6f}\n\n"
 
         # Analysis Summary

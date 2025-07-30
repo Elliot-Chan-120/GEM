@@ -59,7 +59,7 @@ class KeyStone:
         """
         Generates a balanced and shuffle dataframe containing molecular fingerprint-like data characterizing
         various changes in DNA sequences resulting from mutations
-        :return: Model_DataFrame.csv -> numerically characterizes DNA alignment data, structural and mutation changes
+        :return: REF_ALT_df.csv numerically characterizes DNA alignment data, structural and mutation changes
         """
         with gzip.open(self.clinvar_data, "rt") as outfile:
             df = pd.read_csv(outfile, sep="\t", low_memory=False)
@@ -360,6 +360,12 @@ class KeyStone:
         scores = cross_val_score(model, X_train, y_train, cv=5, scoring='average_precision')
         return scores.mean()
 
+
+    def extract_first5(self):
+        with open(self.context_df_outpath, 'rb') as infile:
+            df = pkl.load(infile)
+
+        print(df.head(5).to_string())
 
 
 

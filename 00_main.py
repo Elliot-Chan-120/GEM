@@ -31,7 +31,7 @@ def keystone_p3_demo(ml_modelname='ReGen_v2'):
     test.train_models()
 
 
-def LookingGlass_Demo(fasta_filename='test_fasta', ml_model='ReGen_v2', output_filename='Screen_test_1'):
+def LookingGlass_Demo(fasta_filename='test.fasta', ml_model='ReGen_v2', output_filename='Screen_test_1'):
     test_module = LookingGlass(fasta_filename, ml_model)
     if __name__ == "__main__":
         test_module.predict_file(output_filename)
@@ -43,4 +43,4 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model='ReGen_v2', out
         module.repair()
 
 
-keystone_p3_demo(ml_modelname='ReGen_v2')
+Repair_Gene()

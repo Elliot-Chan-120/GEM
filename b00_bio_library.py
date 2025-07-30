@@ -260,7 +260,8 @@ NET_CHARGES = {
     'Y': 0
 }
 
-# isoelectric points
+# isoelectric point pHs from peptide web
+# NOTE: will retrain model since I was using old textbook values with one outdated value -> shouldn't affect model accuracy much
 ISOELECTRIC_PTS = {
     'A': 6.02,
     'C': 5.02,

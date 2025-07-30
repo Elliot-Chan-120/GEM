@@ -94,6 +94,7 @@ class ReGen:
                 if retain_counter[idx] >= self.retain_threshold:
                     # if retain threshold is met or passed, return a stochastic mutation
                     # + allow room for some decrease in performance
+                    print('random_mutation')
                     new_gene, new_score = self.stoch_mutation(gene)
                     new_score = float(new_score)  # ensure scalar
                     if new_score <= score + self.error_threshold * (self.scale_factor * retain_counter[idx]):
@@ -130,6 +131,7 @@ class ReGen:
 
                     print(f"index: {idx}")
                     print(f"score: {new_score}")
+                    print(f"retain counter: {retain_counter[idx]}")
 
             # move new genes into current for comparison in next iteration
             current_genes = pd.DataFrame(new_genes).reset_index(drop=True)
@@ -192,8 +194,12 @@ class ReGen:
         variant = gene_var['AlternateAlleleVCF']
 
         if len(variant) <= 3:
-            # if it's too small, it has to undergo an addition mutation
-            return self.guided_mutation(gene_var)
+            candidate_genes = []
+            # if it's too small, it has to undergo a random addition mutation
+            for idx in range(10):
+                new_gene = gene_var.copy()
+                new_gene['AlternateAlleleVCF'] = variant + random.choice(self.nt_database)
+                candidate_genes.append(new_gene)
         else:
             candidate_genes = []
             for idx in range(10):
@@ -204,14 +210,14 @@ class ReGen:
                 new_gene['AlternateAlleleVCF'] = variant[:pos] + variant[pos + nt_size:]
                 candidate_genes.append(new_gene)
 
-            candidate_genes = pd.DataFrame(candidate_genes, columns=gene_var.index)
-            candidate_fp = self.mutation_fp(candidate_genes)
+        candidate_genes = pd.DataFrame(candidate_genes, columns=gene_var.index)
+        candidate_fp = self.mutation_fp(candidate_genes)
 
-            scores = self.benign_score(candidate_fp)
-            candidate_genes['Scores'] = scores
-            best_idx = scores.idxmax()
+        scores = self.benign_score(candidate_fp)
+        candidate_genes['Scores'] = scores
+        best_idx = scores.idxmax()
 
-            return candidate_genes.iloc[best_idx][gene_var.index], float(scores[best_idx])
+        return candidate_genes.iloc[best_idx][gene_var.index], float(scores[best_idx])
 
 
 

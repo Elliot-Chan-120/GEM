@@ -1,0 +1,22 @@
+Model: ReGen_v1
+
+Optimal Hyperparameters: {'n_estimators': 1716, 'max_depth': 10, 'learning_rate': 0.027137066985558365, 'subsample': 0.7473838198836186, 'colsample_bytree': 0.9174205784025309, 'reg_alpha': 0.18640493452448254, 'reg_lambda': 0.03349387723357219, 'gamma': 0.27743791475158897, 'scale_pos_weight': 1.4228361217194654}
+Cross Validation Results: Mean ROC AUC: 0.8744, Mean PR AUC: 0.8665
+Mean FNs: 5586.80, Mean FPs: 6481.40
+ROC AUC: 0.8754
+Precision-Recall AUC: 0.8676
+Pathogenic F1-Score: 0.7810
+Optimal threshold for pathogenic detection: 0.459
+Performance with optimal threshold:
+              precision    recall  f1-score   support
+
+           0       0.83      0.81      0.82     41771   Benign
+           1       0.77      0.79      0.78     34002   Pathogenic
+
+    accuracy                           0.80     75773
+   macro avg       0.80      0.80      0.80     75773
+weighted avg       0.80      0.80      0.80     75773
+
+Confusion Matrix:
+[[33685  8086]
+ [ 7007 26995]]

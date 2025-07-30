@@ -68,15 +68,15 @@ protein_gap_penalty: -8
 # ==================================
 # LookingGlass Settings
 # ==================================
-optimal_threshold: 0.459  # this is your trained model's optimal threshold, it is output at the end of model training
+optimal_threshold: 0.513  # this is your trained model's optimal threshold, it is output at the end of model training
 
 # ==================================
 # Regen Settings
 # ==================================
 n_iterations: 50
 n_copies: 1
-decrease_threshold: -0.005
-retain_threshold: 3
+decrease_threshold: -0.05
+retain_threshold: 1
 benign_goal: 0.75   # what % chance we want our resulting alleles to be Benign
 scale_factor: 0.1
 

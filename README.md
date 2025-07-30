@@ -278,7 +278,7 @@ Benign % increase: 85.24704575538635
    Sequence:
     GTC
 
-Note: Top performing genes from every iteration are listed here, I'm skipping the other 49 as there was no improvement, this is also a test run I did in my own time.
+Note: Top performing genes from every iteration are listed here, I'm skipping the other 49 as there was no improvement
 
 Score: 91.5849506855011 | Length: 3 bp
 Benign % increase: 88.2948637008667

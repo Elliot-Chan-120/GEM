@@ -289,8 +289,10 @@ Benign % increase: 88.2948637008667
    Sequence:
     ATC
 
-BENIGN THRESHOLD VARIANTS:
+BENIGN THRESHOLD VARIANTS:  
 --------------------------------------------------
+Note: these are all the variants found that exceed a config-defined 'benign' score threshold (default 0.75. 75%)
+
 Score: 88.53713274002075 | Length: 3 bp
 Benign % increase: 85.24704575538635
    Sequence:

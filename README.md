@@ -264,14 +264,15 @@ ReGen Analysis Results: ReGen_v2 | benchmark_fasta | benchmarkgene1
 ================================================================================
 
 ORIGINAL VARIANT STATS: 
-Sequence: GCTGCTGGACCTGCC
+Ref Sequence: GCTGCTGGACCTGCC
+Alt Sequence: G
 Benign % chance: 3.290087
 
 ANALYSIS SUMMARY:
 |- Starting Score: 0.032901
 |- Original Length: 15 bp
 |- Final Variants: 1
-|- Benign Threshold Variants: 4
+|- Benign Threshold Variants: 9
 |- ReGen config: 50 iterations, 1 copies
 
 MAX BENIGN VARIANTS PER ITERATION:
@@ -281,12 +282,59 @@ Benign % increase: 85.24704575538635
    Sequence:
     GTC
 
-Note: Top performing genes from every iteration are listed here, I'm skipping the other 48...
+Note: Top performing genes from every iteration are listed here, I'm skipping the other 49 as there was no improvement
 
 Score: 91.5849506855011 | Length: 3 bp
 Benign % increase: 88.2948637008667
    Sequence:
     ATC
+
+BENIGN THRESHOLD VARIANTS:
+--------------------------------------------------
+Score: 88.53713274002075 | Length: 3 bp
+Benign % increase: 85.24704575538635
+   Sequence:
+    GTC
+
+Score: 79.46057319641113 | Length: 6 bp
+Benign % increase: 76.17048621177673
+   Sequence:
+    GTCGTC
+
+Score: 78.1769871711731 | Length: 6 bp
+Benign % increase: 74.8869001865387
+   Sequence:
+    GTCATC
+
+Score: 76.32622122764587 | Length: 6 bp
+Benign % increase: 73.03613424301147
+   Sequence:
+    GTCATA
+
+Score: 91.5849506855011 | Length: 3 bp
+Benign % increase: 88.2948637008667
+   Sequence:
+    ATC
+
+Score: 80.94335794448853 | Length: 6 bp
+Benign % increase: 77.65327095985413
+   Sequence:
+    ATCGTA
+
+Score: 75.44633150100708 | Length: 6 bp
+Benign % increase: 72.15624451637268
+   Sequence:
+    ATCATA
+
+Score: 79.13466691970825 | Length: 6 bp
+Benign % increase: 75.84457993507385
+   Sequence:
+    ATCAGT
+
+Score: 75.60388445854187 | Length: 6 bp
+Benign % increase: 72.31379747390747
+   Sequence:
+    ATCATC
 
 FINAL VARIANTS:
 --------------------------------------------------

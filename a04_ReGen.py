@@ -356,7 +356,7 @@ class ReGen:
         for variant in export_data['final_variants']:
             content += f"Score: {variant['Benign_pct']} | "
             content += f"Length: {len(variant['Allele']):,} bp\n"
-            content += f"Benign % increase: {variant['Benign_pct'] - starting_pct}"
+            content += f"Benign % increase: {variant['Benign_pct'] - starting_pct}\n"
 
             sequence = variant['Allele']
             content += f"   Sequence: \n"

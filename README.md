@@ -183,7 +183,7 @@ def keystone_p3_demo(ml_modelname='ReGen_v2'):
 
 
 # When provided with a correctly-formatted special FASTA file (example provided in gene_databank folder), will classify each variant as benign or pathogenic
-def LookingGlass_Demo(fasta_filename='test_fasta', ml_model='ReGen_v2', output_filename='Screen_test_1'):
+def LookingGlass_Demo(fasta_filename='test.fasta', ml_model='ReGen_v2', output_filename='Screen_test_1'):
     test_module = LookingGlass(fasta_filename, ml_model)
     if __name__ == "__main__":
         test_module.predict_file(output_filename)
@@ -231,76 +231,68 @@ Users must provide FASTA sequences in this format to gene_databank:
 Remember that flanking context sequences (ideally 500bp) must be provided
 If flanking sequences are under 500, nothing's going to break, but the lack of context will most likely bottleneck the model's prediction power.
 
-Below is a cut-off version of the pretend gene in gene_databank
+BenchmarkGene1 is the first pathogenic gene variant in our dataset
+I have trimmed it down for this README.md, the full sequence is in the file
 
 >chr'X'| ref / alt / flank1 / flank2 | gene_name
 
 >chr9|ref|BenchmarkGene1
-ACTGACTGCATGACTAGCTACGACTGACTGACTCAGTACGACTGACTACGTACGATCGTCGCTGCATGCTCAG
+GCTGCTGGACCTGCC
 
 >chr9|alt|BenchmarkGene1
-ACTGCTGACTCAGTCAGACTGCATGACTACGTCAGTACGCATGCA
+G
 
 >chr9|flank1|BenchmarkGene1
-ATCGATCGTACGCGCTAGTAGCTACGATCGAGATCGATCGACTGGCCGCTATATATCGCCGATCTGATGATCG
+ACACCTGTAATCCCAGCACCTCGGGAGGCCAAGGCAGGAGGATCTTGAGGCCAGGAGTTCAAGACCAGCC
 
 >chr9|flank2|BenchmarkGene1
-ACTGGCGCCGCGGGGATATCTCTCTCTTAGCGCGCCGATATCGCACCATCACGACTAGTCAGTCGTCCGCGCC
+CTGCTTGACGGCGGTGCTGGACCTGCAGCTCAGGTGGGCCCCTCACCCTCTGCCAGCGCTGCGTCT
 ```
 
 *LookingGlass output from the test gene file*
 ```
 Name,Predicted_Class,Prob_Benign,Prob_Pathogenic
-benchmarkgene1,1,0.0025193095,0.9974807
-benchmarkgene2,1,0.0074431896,0.9925568
+benchmarkgene1,1,0.03290087,0.96709913
+benchmarkgene2,1,0.0022346973,0.9977653
 ```
 
 ## ReGen example Input and Results
 Note: Users need to insert a FASTA file of the same custom format in the ReGen_input folder
 ```
 ================================================================================
-ReGen Analysis Results: ReGen_V1 | benchmark_fasta | benchmarkgene1
+ReGen Analysis Results: ReGen_v2 | benchmark_fasta | benchmarkgene1
 ================================================================================
 
 ORIGINAL VARIANT STATS: 
-Sequence: ACTGACTGCATGACTAGCTACGACTGACTGACTCAGTACGACTGACTACGTACGATCGTCGCTGCATGCTCAGTACGACTGACGAC
-Benign % chance: 0.251931
+Sequence: GCTGCTGGACCTGCC
+Benign % chance: 3.290087
 
 ANALYSIS SUMMARY:
-|- Starting Score: 0.002519
-|- Original Length: 86 bp
+|- Starting Score: 0.032901
+|- Original Length: 15 bp
 |- Final Variants: 1
-|- Benign Threshold Variants: 0
+|- Benign Threshold Variants: 4
 |- ReGen config: 50 iterations, 1 copies
 
 MAX BENIGN VARIANTS PER ITERATION:
 --------------------------------------------------
-Score: 0.8367717266082764 | Length: 92 bp
-Benign % increase: 0.5848407745361328
+Score: 88.53713274002075 | Length: 3 bp
+Benign % increase: 85.24704575538635
    Sequence:
-    ACTGCTGACTCAGTCAGACTGCATGACTACGTCAGTACGCATGCATGACTGCATGCATCAGTACGTGCTGCTGCATGCGG
-    CGCCCCCAAAAA
+    GTC
 
-Score: 1.2857317924499512 | Length: 91 bp
-Benign % increase: 1.0338008403778076
+Note: Top performing genes from every iteration are listed here, I'm skipping the other 48...
+
+Score: 91.5849506855011 | Length: 3 bp
+Benign % increase: 88.2948637008667
    Sequence:
-    ACTGCGACTCAGTCAGACTGCATGACTACGTCAGTACGCATGCATGACTGCATGCATCAGTACGTGCTGCTGCATGCGGC
-    GCCCCCAAAAA
-
-Note: Top performing genes from every iteration are listed here, I'm skipping the other 47...
-
-Score: 5.8156609535217285 | Length: 92 bp
-Benign % increase: 5.563730001449585
-   Sequence:
-    ACTGGACTCATCAGACTGCGACTACGTCAGTACGCATGCATGACTGCATGCATCAGTACGTGCTGCTGCATGCGGCGCCC
-    CCATGCATGACC
+    ATC
 
 FINAL VARIANTS:
 --------------------------------------------------
-Score: 5.8156609535217285 | Length: 92 bp
-Benign % increase: 5.563730001449585   Sequence: 
-    ACTGGACTCATCAGACTGCGACTACGTCAGTACGCATGCATGACTGCATGCATCAGTACGTGCTGCTGCATGCGGCGCCC
-    CCATGCATGACC
+Score: 91.5849506855011 | Length: 3 bp
+Benign % increase: 88.2948637008667   Sequence: 
+    ATC
 ```
 Multiple copies can be run simultaneously, I just personally chose to run with 1 for ease of debugging, as it was easier to keep track of the 1.
 

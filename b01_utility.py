@@ -63,3 +63,11 @@ def custom_parse(fasta_filepath):
         dataframe.append(df_dict)
 
     return dataframe
+
+
+def feature_filter(X_features):
+    """
+    Selectively removes features depending on their importance scores
+    :param X_features:
+    :return: Filtered features with greater importances
+    """

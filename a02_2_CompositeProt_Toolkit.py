@@ -133,6 +133,7 @@ class CompositeProt:
                 initargs=(self.config, START, STOPS, AMBIGUOUS, IUPAC_CODES)
             )
 
+
     def terminate_pool(self):
         """
         Terminate multiprocessing pool when no longer needed
@@ -244,7 +245,7 @@ class CompositeProt:
         seq, ref_orf, ref_orf_score = self.optimal_orf_search(ref_full)
         rc_seq, rc_orf, rc_orf_score = self.optimal_orf_search(reverse_complement)
 
-        # since the reverse complement may have the best orf, we should return that, and not the orf coordinates alone
+        # since the reverse complement may have the best orf, we should return the sequence, and not the orf coordinates alone
         # otherwise we would be translating the default sequence with the reverse complement's orf coordinates
         if ref_orf_score > rc_orf_score:
             return seq, ref_orf

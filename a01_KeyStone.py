@@ -1,14 +1,14 @@
 import gzip
 import pickle as pkl
-from pathlib import Path
 from pyfaidx import Fasta
 
 from a02_1_CompositeDNA_Toolkit import *
 from a02_2_CompositeProt_Toolkit import *
 
+from DataSift import DataSift
+import optuna
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
-import optuna
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 
 
@@ -42,6 +42,9 @@ class KeyStone:
         self.model_name = model_name
         self.model_storage = Path(self.cfg['model_folder'])
         self.model_path = self.model_storage / f"{self.model_name}"
+
+        # optimal features
+        self.optimal_features = []
 
        # create full path in one go with parents=True
         self.model_path.mkdir(parents=True, exist_ok=True)
@@ -187,7 +190,7 @@ class KeyStone:
         Builds dataframe for variants -> DNA and AA profiles at once
         This process will take a fairly long time - I am trying to implement multicore optimizations,
         it's just a little tricky rn with the class variables holding some crucial elements
-        :return: Dataframe in database//VARIANT_df.csv
+        :return: Dataframe in database//VARIANT_df.pkl
         """
         with open(self.context_df_outpath, 'rb') as infile:
             df = pkl.load(infile)
@@ -217,6 +220,12 @@ class KeyStone:
 
 
     def train_models(self):
+        """
+        Call on this to train the models
+        1) Feature optimization
+        2) Hyperparameter optimization
+        3) Model saving
+        """
         # load data and train models
         with open(self.final_df_path, 'rb') as infile:
             variant_dataframe = pkl.load(infile)
@@ -225,14 +234,14 @@ class KeyStone:
 
 
     def optimized_model(self, df):
-        X = df.drop("ClinicalSignificance", axis=1)
-        y = df['ClinicalSignificance']
+        y_label = 'ClinicalSignificance'
+        X = df.drop(y_label, axis=1)
+        y = df[y_label]
 
         X = X.apply(pd.to_numeric, errors= 'coerce')
 
         label_map = {'Benign': 0, 'Pathogenic': 1}
         y = y.map(label_map)
-
 
         X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                             test_size = 0.2,
@@ -246,12 +255,15 @@ class KeyStone:
         # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=100)
         # best_params = study.best_params
 
-        # I did that already, took two hours
-
-        best_params = {'n_estimators': 1936, 'max_depth': 10, 'learning_rate': 0.041977875319094894,
-                       'subsample': 0.8691093047813849, 'colsample_bytree': 0.9973783186852718,
-                       'reg_alpha': 0.20907871533405323, 'reg_lambda': 1.6124970064334614,
-                       'gamma': 0.35865668074613577, 'scale_pos_weight': 1.8996291716997067}
+        best_params = {'n_estimators': 1936,
+                       'max_depth': 10,
+                       'learning_rate': 0.041977875319094894,
+                       'subsample': 0.8691093047813849,
+                       'colsample_bytree': 0.9973783186852718,
+                       'reg_alpha': 0.20907871533405323,
+                       'reg_lambda': 1.6124970064334614,
+                       'gamma': 0.35865668074613577,
+                       'scale_pos_weight': 1.8996291716997067}
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
 
@@ -259,6 +271,7 @@ class KeyStone:
         import os
         from sklearn.model_selection import StratifiedKFold
         from sklearn.metrics import roc_auc_score, precision_recall_curve, auc, f1_score
+
         print(f"Optimal Hyperparameters: {parameters}")
 
         strat_fold = StratifiedKFold(n_splits = 5, shuffle=True)

@@ -163,8 +163,8 @@ START = ["ATG", "CTC", "CTG", "TTG"]
 
 STOPS = ["TAA", "TAG", "TGA"]
 
-
-DNA_TF_MOTIFS = ['TATAAA',                        # TATA box - promoter stability
+# keep this just in case
+DNA_RIGID_TFs = ['TATAAA',                        # TATA box - promoter stability
                 'GGGCGG',                         # GC-box (SP1 binding)
                 '[GC]{6,}',                       # not really a TF but promotes stability
                 'GGCCAATCT',                      # CAAT box
@@ -177,9 +177,9 @@ DNA_TF_MOTIFS = ['TATAAA',                        # TATA box - promoter stabilit
                 'GATA',                           # GATA family
                 'TTGC..AA']                       # C/EBP]
 
-DNA_UNSTABLE_MOTIFS = ['[AAAAAA]{2,}', '[TTTTT]{2,}', '(AT){4,}']
-# AAAAAA -> poly-A tracts - frameshift propensity
-# TTTTT -> poly-T tracts - replication stress
+
+POLY_TRACTS = ['A{6,}', 'C{6,}', 'G{6,}', 'T{6,}', '(?:AT){4,}']
+# poly tracts
 # AT dinucleotide repeat - prone to slippage
 
 INTRON = "GT[ATCG]{1,10}TACTAAC[ATCG]{1,10}AC"

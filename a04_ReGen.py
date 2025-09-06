@@ -376,4 +376,14 @@ class ReGen:
         pass
 
 
+    def gene_map(self):
+        """
+        Outputs linear gene maps showing what elements and properties changed
+        :return:
+        """
+        pass
+
+
+
+
 

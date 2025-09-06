@@ -1,3 +1,4 @@
+# Navigation help
 import yaml
 from pathlib import Path
 
@@ -9,41 +10,53 @@ import pandas as pd
 from collections import Counter
 import re
 from tqdm import tqdm
+import random
 
 # multiprocessing
 import multiprocessing
 from multiprocessing import Pool
 
 # initialize biological structure libraries
-from b00_bio_library import (COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS,
-                             DNA_TF_MOTIFS, DNA_UNSTABLE_MOTIFS, INTRON)
+from b00_bio_library import COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON
 
+
+# === load up motif PWMs globally for repeated reference ===
+motif_path = Path('database/pwm_database')
+splice_3_pwm = np.loadtxt(motif_path / '3_splice_pwm.txt')  # human donor splice site (3')
+splice_5_pwm = np.loadtxt(motif_path / '5_splice_pwm.txt')  # human acceptor splice site (5')
+branch_pt_pwm = np.loadtxt(motif_path / 'branch_pt_pwm.txt')  # human branch point -> took image from study and ran it through AI to reconstruct PWM, take this w/ grain of salt
+
+# simple transcription factors
+ctcf_pwm = np.loadtxt(motif_path / 'CTCF_TF_pwm.txt')  # CTCF transcription factor
+caat_pwm = np.loadtxt(motif_path / 'CAAT_pwm.txt')  # CAAT box TF
+tata_pwm = np.loadtxt(motif_path / 'TATA_pwm.txt')  # TATA box TF
 
 global_config = {}
 
 def config_init(config, complements, nn_free_energy,
-                gene_densities, stops, dna_tf_motifs,
-                dna_unstable_motifs, intron):
+                gene_densities, stops,
+                poly_tracts, intron):
     """
-    Create global variables for each process to access external data and config
+    Create global variables for each worker process
     :param config:
     :param complements:
     :param nn_free_energy:
     :param gene_densities:
     :param stops:
-    :param dna_tf_motifs:
-    :param dna_unstable_motifs:
+    :param poly_tracts:
     :param intron:
     :return:
     """
-    global global_config, COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, DNA_TF_MOTIFS, DNA_UNSTABLE_MOTIFS, INTRON
+    # These become GLOBAL variables in each worker process - check multiprocessing pool functions in class
+    global global_config, COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON
+
+
     global_config = config
     COMPLEMENTS = complements
     NN_FREE_ENERGY = nn_free_energy
     GENE_DENSITIES = gene_densities
     STOPS = stops
-    DNA_TF_MOTIFS = dna_tf_motifs
-    DNA_UNSTABLE_MOTIFS = dna_unstable_motifs
+    POLY_TRACTS = poly_tracts
     INTRON = intron
 
 
@@ -58,10 +71,8 @@ class CompositeDNA:
             # config parameters
             self.k_min = self.cfg['k_min']
             self.k_max = self.cfg['k_max']
-            self.variant_num = self.cfg['variant_num']
             self.match, self.mismatch = self.cfg['match'], self.cfg['mismatch']
             self.splice_site_window = self.cfg['splice_site_window']
-            self.motif_window = self.cfg['motif_window']
 
             self.min_repeat_length, self.max_repeat_length = self.cfg['min_repeat_length'], self.cfg[
                 'max_repeat_length']
@@ -74,10 +85,6 @@ class CompositeDNA:
             # buffer region size
             self.structural_buffer = self.cfg['DNA_buffer_region']
 
-            # store motifs here
-            self.intron = INTRON
-            self.dna_tf_motifs = DNA_TF_MOTIFS
-            self.dna_unstable_motifs = DNA_UNSTABLE_MOTIFS
 
         # create config for downstream multiproc
         self.config = {
@@ -112,9 +119,8 @@ class CompositeDNA:
                 initializer=config_init,
                 initargs=(self.config, COMPLEMENTS,
                           NN_FREE_ENERGY, GENE_DENSITIES, STOPS,
-                          DNA_TF_MOTIFS, DNA_UNSTABLE_MOTIFS, INTRON)
+                          POLY_TRACTS, INTRON)
             )
-
 
     def terminate_pool(self):
         """
@@ -172,8 +178,12 @@ class CompositeDNA:
         """
         chromosome, ref_allele, alt_allele, flank_1, flank_2 = fp_row
         config = global_config
+
+        # Organize sequence dimensions
+        # Full-length alleles (context-inclusive)
         ref_full = flank_1 + ref_allele + flank_2
         alt_full = flank_1 + alt_allele + flank_2
+        # Buffered alleles (for specific mutations)
         ref_buffered = flank_1[len(flank_1) - config['structural_buffer']:] + ref_allele + flank_2[:config[
             'structural_buffer']]
         alt_buffered = flank_1[len(flank_1) - config['structural_buffer']:] + alt_allele + flank_2[:config[
@@ -189,7 +199,7 @@ class CompositeDNA:
 
         # mutation composite
         fp['FI_Mutation_composite'] = (fp['Tandem_Duplications'] + fp['Hairpins'] + fp['Microsatellites'] +
-                                       fp['Unstable_motif'] + fp['SNVs'] + fp['Insertion_length'])
+                                       fp['Poly_tracts'] + fp['SNVs'] + fp['Insertion_length'])
 
         return fp
 
@@ -300,17 +310,14 @@ class CompositeDNA:
             'Introns': self.intron_delta(ref_buffered, alt_buffered),
 
             # 4 - transcription factor and instability motifs
-            'TF_motif': self.tf_motif_delta(ref_buffered, alt_buffered),
-            'Unstable_motif': self.unstable_motifs_delta(ref_buffered, alt_buffered)
+            'Poly_tracts': self.poly_tract_delta(ref_buffered, alt_buffered)
         }
 
         # 2 Feature Interactions
         flanked_fp['FI_Mutation_propensity'] = ((flanked_fp['Tandem_Duplications'] +
                                                  flanked_fp['Hairpins'] +
                                                  flanked_fp['Microsatellites'] +
-                                                 flanked_fp['Unstable_motif']) -
-                                                 flanked_fp['TF_motif'])
-
+                                                 flanked_fp['Poly_tracts']))
         return flanked_fp
 
     # =====[[ALIGNMENT DATA]]=====
@@ -629,6 +636,7 @@ class CompositeDNA:
         :param univ_original: can be either the ref_allele fully flanked or variant region
         :param univ_mutation: can be either the alt_allele fully flanked or variant region
         :return: the change in thermodynamic stability
+
         """
         # Calculate direct stability changes between the original-reverse, and mutation-reverse
         # scoring in b00_bio_library.py
@@ -655,7 +663,7 @@ class CompositeDNA:
         """
         total_energy = 0.0
 
-        # finds the score for each 2 nucleotide subsequence and finds the average for ambiguous sequences
+        # finds the score for each 2 nucleotide subsequence and finds the average for sequences
         for i in range(len(sequence) - 1):
             dinuc_extract = sequence[i:i + 2]
             total_energy += NN_FREE_ENERGY[dinuc_extract]
@@ -717,7 +725,7 @@ class CompositeDNA:
         return kmer_frequencies
 
     # ====[MUTATIONS]====
-    # Detects secondary structures, motifs or specific mutations
+    # Detects secondary structures and specific mutations
     @staticmethod
     def snv(global1, global2):
         """NW Alignments - Returns 1 if it detects an SNV mutation"""
@@ -914,31 +922,23 @@ class CompositeDNA:
         stop_codons = '|'.join(STOPS)
         return len(re.findall(stop_codons, sequence))
 
-    # Regex-aided motif changes
+    # regex-search poly-tracts
+    def poly_tract_delta(self, br_original, br_mutation):
+        return self.poly_tract_count(br_mutation) - self.poly_tract_count(br_original)
 
-    # transcription factor + stability motifs
-    def tf_motif_delta(self, br_original, br_mutation):
-        return self.tf_motif_count(br_mutation) - self.tf_motif_count(br_original)
-
-    def tf_motif_count(self, sequence):
-        stability_motifs = '|'.join(self.dna_tf_motifs)
-        return len(re.findall(stability_motifs, sequence))
-
-    # unstable dna motifs
-    def unstable_motifs_delta(self, br_original, br_mutation):
-        return self.unstable_motif_count(br_mutation) - self.unstable_motif_count(br_original)
-
-    def unstable_motif_count(self, sequence):
-        instability_motifs = '|'.join(self.dna_unstable_motifs)
-        return len(re.findall(instability_motifs, sequence))
+    @staticmethod
+    def poly_tract_count(sequence):
+        tracts = '|'.join(POLY_TRACTS)
+        return len(re.findall(tracts, sequence))
 
     # intron finder
     def intron_delta(self, br_original, br_mutation):
         return self.find_introns(br_mutation) - self.find_introns(br_original)
 
-    def find_introns(self, sequence):
+    @staticmethod
+    def find_introns(sequence):
         intron_count = 0
-        result = len(re.findall(self.intron, sequence))
+        result = len(re.findall(INTRON, sequence))
         if result is not None:
             intron_count = result
         return intron_count

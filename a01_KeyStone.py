@@ -4,6 +4,7 @@ from pyfaidx import Fasta
 
 from a02_1_CompositeDNA_Toolkit import *
 from a02_2_CompositeProt_Toolkit import *
+from a02_3_DNAMatrixProfile import *
 
 from DataSift import DataSift
 import optuna
@@ -195,6 +196,10 @@ class KeyStone:
         with open(self.context_df_outpath, 'rb') as infile:
             df = pkl.load(infile)
 
+
+        with DNAMatrixProfile() as dna_pwm_module:
+            dna_pwm_df = dna_pwm_module.gen_DNApwm_dataframe(df)
+
         # note: modules support multiprocessing context managers
         # ==[DNA data]==
         # 12:35 to 13:20, dropped from 1.5 hours
@@ -206,14 +211,13 @@ class KeyStone:
         with CompositeProt() as prot_module:
             prot_df = prot_module.gen_AAfp_dataframe(df)
 
-
-
         # [[Save DataFrame]]
         # ensure alignment - in case something goes wrong with one of them
+        dna_pwm_df.index = df.index
         dna_df.index = df.index
         prot_df.index= df.index
 
-        variant_final_df = pd.concat([dna_df, prot_df], axis=1)
+        variant_final_df = pd.concat([dna_df, prot_df, dna_pwm_df], axis=1)
         with open(self.final_df_path, 'wb') as outfile:
             pkl.dump(variant_final_df, outfile)
         return True
@@ -226,22 +230,37 @@ class KeyStone:
         2) Hyperparameter optimization
         3) Model saving
         """
+
         # load data and train models
         with open(self.final_df_path, 'rb') as infile:
             variant_dataframe = pkl.load(infile)
+
+        print(variant_dataframe.columns)
 
         self.optimized_model(variant_dataframe)
 
 
     def optimized_model(self, df):
+        # from DataSift import DataSift
         y_label = 'ClinicalSignificance'
+        df = df.loc[:, ~df.columns.duplicated()]
+
         X = df.drop(y_label, axis=1)
         y = df[y_label]
 
         X = X.apply(pd.to_numeric, errors= 'coerce')
 
         label_map = {'Benign': 0, 'Pathogenic': 1}
+
         y = y.map(label_map)
+
+        # Hopefully I figure out how to make this actually work well later
+        # refined_features = DataSift(XGBClassifier(),
+        #                             df,
+        #                             y_label,
+        #                             label_map).d_sift()
+        #
+        # X = X[refined_features]
 
         X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                             test_size = 0.2,
@@ -379,10 +398,3 @@ class KeyStone:
             df = pkl.load(infile)
 
         print(df.head(5).to_string())
-
-
-
-
-
-
-

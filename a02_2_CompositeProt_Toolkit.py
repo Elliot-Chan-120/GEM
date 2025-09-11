@@ -151,6 +151,27 @@ class CompositeProt:
         self.terminate_pool()
 
     # ====[[MUTATION FINGERPRINT]]====
+    def gen_AAseqs(self, dataframe):
+        fingerprint_rows = [
+            (row['Chromosome'], row['ReferenceAlleleVCF'],
+             row['AlternateAlleleVCF'], row['Flank_1'], row['Flank_2'])
+            for _, row in dataframe.iterrows()
+        ]
+
+        fingerprint_rows = list(tqdm(
+            CompositeProt._pool.imap(self.AA_finder_wrapper, fingerprint_rows),
+            total=len(fingerprint_rows),
+            desc="[Extracting highest prob. AA sequences]"
+        ))
+
+        fingerprint_df = pd.DataFrame(fingerprint_rows)
+        fingerprint_df = pd.concat([dataframe.reset_index(drop=True), fingerprint_df],
+                                   axis=1)  # axis = 1 to concatenate column wise (side by side)
+
+        # don't drop anything, we want to keep clinical significance for future analyis
+
+        return fingerprint_df
+
     def gen_AAfp_dataframe(self, dataframe):
         """
         RUN THIS TO GET RETURN A FULL FINGERPRINT DATAFRAME
@@ -158,8 +179,8 @@ class CompositeProt:
         :return:
         """
         fingerprint_rows = [
-            (row['Chromosome'], row['ReferenceAlleleVCF'],
-             row['AlternateAlleleVCF'], row['Flank_1'], row['Flank_2'])
+            (row['ref_protein_list'], row['alt_protein_list'],
+             row['non_ambiguous_ref'], row['non_ambiguous_alt'], row['ref_protein_length'])
             for _, row in dataframe.iterrows()
         ]
 
@@ -181,7 +202,12 @@ class CompositeProt:
         return fingerprint_df
 
     #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    def AA_fingerprinter_wrapper(self, fp_row):
+    def AA_finder_wrapper(self, fp_row):
+        """
+        Finds most likely amino acid sequence to be made
+        :param fp_row:
+        :return:
+        """
         chromosome, ref_allele, alt_allele, flank_1, flank_2 = fp_row
         config = global_config
 
@@ -207,11 +233,31 @@ class CompositeProt:
         # will need this for a future feature interaction
         ref_protein_length = len(non_ambiguous_ref)
 
+        AA_sequence_profile = {
+            'ref_protein_list': ref_protein_list,
+            'alt_protein_list': alt_protein_list,
+            'non_ambiguous_ref': non_ambiguous_ref,
+            'non_ambiguous_alt': non_ambiguous_alt,
+            'ref_protein_length': ref_protein_length,
+        }
+
+        return AA_sequence_profile
+
+
+
+    def AA_fingerprinter_wrapper(self, fp_row):
+        """
+        Builds profile on the most likely protein sequences
+        :param fp_row:
+        :return:
+        """
+        ref_protein_list, alt_protein_list, non_ambiguous_ref, non_ambiguous_alt, ref_protein_list = fp_row
+        config = global_config
+
         profile = self.structural_profile(ref_protein_list, alt_protein_list, non_ambiguous_ref, non_ambiguous_alt,
                                           ref_protein_length, config)
 
         return profile
-
 
     # substitution matrix generation for alignment calculations
     def read_submat_file(self):

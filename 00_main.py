@@ -4,11 +4,25 @@ from a04_ReGen import ReGen
 
 model_name = "ReGEN_v3"
 
+# for some reason use this
 def keystone_dataframe_processing(ml_modelname=model_name):
     test = KeyStone(ml_modelname)
     test.naive_dataframe()
     test.decompress_genome()
     test.context_dataframe()
+
+
+def keystone_extract_proteins(model = model_name):
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success = test.protein_extraction()
+            if success:
+                print("[Protein Sequence Extraction Completed]")
+    except Exception as e:
+        print(f"Mutation Fingerprint Generation Failed: {e}")
+        raise
+
 
 
 def keystone_dataframe_generation(ml_modelname=model_name):
@@ -22,7 +36,7 @@ def keystone_dataframe_generation(ml_modelname=model_name):
         if __name__ == "__main__":
             success = test.generate_fp()
             if success:
-                print("[[Fingerprint DataFrame Generation Completed]]")
+                print("[Fingerprint DataFrame Generation Completed]")
     except Exception as e:
         print(f"Mutation Fingerprint Generation Failed: {e}")
         raise
@@ -46,4 +60,3 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
         module.repair()
 
 
-keystone_model_training()

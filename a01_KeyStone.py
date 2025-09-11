@@ -4,7 +4,7 @@ from pyfaidx import Fasta
 
 from a02_1_CompositeDNA_Toolkit import *
 from a02_2_CompositeProt_Toolkit import *
-from a02_3_DNAMatrixProfile import *
+from a02_3_PosWeightProfiler import *
 
 from DataSift import DataSift
 import optuna
@@ -28,15 +28,22 @@ class KeyStone:
             self.cfg = yaml.safe_load(outfile)
 
         # Navigation
-        self.clinvar_data = Path(self.cfg['database_folder']) / self.cfg['clinvar_data']
-        self.genome_gz = Path(self.cfg['database_folder']) / self.cfg['GRCh38_gz']
-        self.genome_decomp = Path(self.cfg['database_folder']) / self.cfg['GRCh38_fna']
+        self.database = Path(self.cfg['database_folder'])  # main database folder
+        self.clinvar_data = self.database / self.cfg['clinvar_data']
+        self.genome_gz = self.database / self.cfg['GRCh38_gz']
+        self.genome_decomp = self.database / self.cfg['GRCh38_fna']
 
-        self.naivefile_df_outpath = Path('database') / f"{self.cfg['ref_alt_df']}.csv"
-        self.context_df_outpath = Path('database') / f"{self.cfg['context_df']}.pkl"
+        self.naivefile_df_outpath = self.database / f"{self.cfg['ref_alt_df']}.csv"
+        self.context_df_outpath = self.database / f"{self.cfg['context_df']}.pkl"
+
+        # dataframe saves
+        self.composite_dataframe = self.database / f"{self.cfg['composite_df']}.pkl"
+        self.dna_profile_df = self.database / f"{self.cfg['dna_profile']}.pkl"
+        self.prot_profile_df = self.database / f"{self.cfg['prot_profile']}.pkl"
+        self.pwm_profile_df = self.database / f"{self.cfg['pwm_profile']}.pkl"
 
         # final dataframe for model training
-        self.final_df_path = Path('database') / f"{self.cfg['full_variant_df']}.pkl"
+        self.final_df_path = self.database / f"{self.cfg['full_variant_df']}.pkl"
 
 
         # model storage
@@ -180,44 +187,95 @@ class KeyStone:
             pkl.dump(new_df, outfile)
 
 
+
     # ====[FEATURE ENGINEERING --> GENERATE SHORT AND STRUCTURAL VARIANT DATAFRAMES]===
     # pass data on to my two 1000+ line classes for feature extraction and engineering
     # one analyzes the DNA sequences and the other the most-likely translated protein
     # concatenate the DNA and Prot dataframe for each variant type
     # One dataframe for short variants and one for structural variants
     # Now we can train our models
-    def generate_fp(self):
+
+    def protein_extraction(self):
+        with open(self.context_df_outpath, 'rb') as infile:
+            df = pkl.load(infile)
+            # load up default dataframe, pass it to composite prot to extract all the protein sequences first
+
+        with CompositeProt() as prot_module:
+            composite_df = prot_module.gen_AAseqs(df)
+
+        with open(self.composite_dataframe, 'wb') as outfile:
+            pkl.dump(composite_df, outfile)
+
+        print(composite_df.columns)
+        return True
+
+
+    def generate_dna_profile(self):
         """
         Builds dataframe for variants -> DNA and AA profiles at once
         This process will take a fairly long time - I am trying to implement multicore optimizations,
         it's just a little tricky rn with the class variables holding some crucial elements
         :return: Dataframe in database//VARIANT_df.pkl
         """
-        with open(self.context_df_outpath, 'rb') as infile:
+        with open(self.composite_dataframe, 'rb') as infile:
             df = pkl.load(infile)
-
-
-        with DNAMatrixProfile() as dna_pwm_module:
-            dna_pwm_df = dna_pwm_module.gen_DNApwm_dataframe(df)
 
         # note: modules support multiprocessing context managers
         # ==[DNA data]==
         # 12:35 to 13:20, dropped from 1.5 hours
         with CompositeDNA() as dna_module:
             dna_df = dna_module.gen_DNAfp_dataframe(df)
+        dna_df.index = df.index  # ensure alignment for downstream processing
+
+        with open(self.dna_profile_df, 'wb') as outfile:
+            pkl.dump(dna_df, outfile)
+        return True
+
+
+    def generate_prot_profile(self):
+        with open(self.composite_dataframe, 'rb') as infile:
+            df = pkl.load(infile)
 
         # ==[Protein data]==
         # 1.5 hours, dropped from a prospective 7-9 hours
         with CompositeProt() as prot_module:
             prot_df = prot_module.gen_AAfp_dataframe(df)
+        prot_df.index = df.index
 
-        # [[Save DataFrame]]
-        # ensure alignment - in case something goes wrong with one of them
-        dna_pwm_df.index = df.index
-        dna_df.index = df.index
-        prot_df.index= df.index
+        with open(self.prot_profile_df, 'wb') as outfile:
+            pkl.dump(prot_df, outfile)
+        return True
 
-        variant_final_df = pd.concat([dna_df, prot_df, dna_pwm_df], axis=1)
+
+    def generate_pwm_profile(self):
+        with open(self.composite_dataframe, 'rb') as infile:
+            df = pkl.load(infile)
+
+        # big boy -> 3-4 ish hours, time to take a nap
+        with PosWeightProfiler() as dna_pwm_module:
+            dna_pwm_df = dna_pwm_module.gen_DNApwm_dataframe(df)
+        dna_pwm_df.index = df.index  # ensure index alignment
+
+        with open(self.pwm_profile_df, 'wb') as outfile:
+            pkl.dump(dna_pwm_df, outfile)
+        return True
+
+
+    def get_final_dataframe(self):
+        with open(self.dna_profile_df, 'rb') as infile:
+            dna_df = pkl.load(infile)
+
+        with open(self.prot_profile_df, 'rb') as infile:
+            prot_df = pkl.load(infile)
+
+        with open(self.pwm_profile_df, 'rb') as infile:
+            pwm_df = pkl.load(infile)
+
+        for df in [dna_df, prot_df, dna_pwm_df]:
+            if not df or df.empty:
+                raise ValueError('Missing or Received empty dataframe')
+
+        variant_final_df = pd.concat([dna_df, prot_df, pwm_df], axis=1)
         with open(self.final_df_path, 'wb') as outfile:
             pkl.dump(variant_final_df, outfile)
         return True
@@ -226,7 +284,7 @@ class KeyStone:
     def train_models(self):
         """
         Call on this to train the models
-        1) Feature optimization
+        1) Feature optimization -> not possible yet still need to tweak DataSift before using it in this pipeline
         2) Hyperparameter optimization
         3) Model saving
         """
@@ -234,8 +292,6 @@ class KeyStone:
         # load data and train models
         with open(self.final_df_path, 'rb') as infile:
             variant_dataframe = pkl.load(infile)
-
-        print(variant_dataframe.columns)
 
         self.optimized_model(variant_dataframe)
 
@@ -274,15 +330,11 @@ class KeyStone:
         # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=100)
         # best_params = study.best_params
 
-        best_params = {'n_estimators': 1936,
-                       'max_depth': 10,
-                       'learning_rate': 0.041977875319094894,
-                       'subsample': 0.8691093047813849,
-                       'colsample_bytree': 0.9973783186852718,
-                       'reg_alpha': 0.20907871533405323,
-                       'reg_lambda': 1.6124970064334614,
-                       'gamma': 0.35865668074613577,
-                       'scale_pos_weight': 1.8996291716997067}
+        best_params = {'n_estimators': 1942, 'max_depth': 10,
+                       'learning_rate': 0.02986338169021856,
+                       'subsample': 0.8226313876213229, 'colsample_bytree': 0.514017460447543,
+                       'reg_alpha': 0.306470753571224,'reg_lambda': 0.6820840484643682,
+                       'gamma': 0.0011576674746305304, 'scale_pos_weight': 1.1247869790925638}
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
 

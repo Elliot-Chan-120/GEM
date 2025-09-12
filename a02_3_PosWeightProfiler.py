@@ -127,7 +127,7 @@ class PosWeightProfiler:
         fingerprint_df = pd.concat([dataframe.reset_index(drop=True), fingerprint_df],
                                    axis=1)  # axis = 1 to concatenate column wise (side by side)
 
-        fingerprint_df = fingerprint_df.drop(['ReferenceAlleleVCF', 'AlternateAlleleVCF', 'Flank_1', 'Flank_2'],
+        fingerprint_df = fingerprint_df.drop(['Chromosome', 'ClinicalSignificance', 'ReferenceAlleleVCF', 'AlternateAlleleVCF', 'Flank_1', 'Flank_2'],
                                              axis=1)
 
         return fingerprint_df
@@ -171,14 +171,14 @@ class PosWeightProfiler:
         non_ambi_alt = PosWeightProfiler.non_ambi_seq(full_alt_allele)
 
         # splice sites + branch points
-        sp3_count, sp3_score = PosWeightProfiler.dna_pwm_stats(global_config['splice_3_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf, threshold = )
-        sp5_count, sp5_score = PosWeightProfiler.dna_pwm_stats(global_config['splice_5_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf)
-        branch_pt_count, branch_pt_score = PosWeightProfiler.dna_pwm_stats(global_config['branch_pt_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf)
+        sp3_count, sp3_score = PosWeightProfiler.dna_pwm_stats(global_config['splice_3_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf, 0.95)
+        sp5_count, sp5_score = PosWeightProfiler.dna_pwm_stats(global_config['splice_5_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf, 0.95)
+        branch_pt_count, branch_pt_score = PosWeightProfiler.dna_pwm_stats(global_config['branch_pt_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf, 0.85)
 
         # transcription factors
-        caat_count, caat_score = PosWeightProfiler.dna_pwm_stats(global_config['caat_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf)
-        ctcf_count, ctcf_score = PosWeightProfiler.dna_pwm_stats(global_config['ctcf_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf)
-        tata_count, tata_score = PosWeightProfiler.dna_pwm_stats(global_config['tata_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf)
+        caat_count, caat_score = PosWeightProfiler.dna_pwm_stats(global_config['caat_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf, 0.90)
+        ctcf_count, ctcf_score = PosWeightProfiler.dna_pwm_stats(global_config['ctcf_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf, 0.90)
+        tata_count, tata_score = PosWeightProfiler.dna_pwm_stats(global_config['tata_pwm'], non_ambi_ref, non_ambi_alt, flank1, flank2, ref_vcf, alt_vcf, 0.90)
 
         total_motif_count = sp3_count + sp5_count + branch_pt_count + caat_count + ctcf_count + tata_count
         total_score_shift = sp3_score + sp5_score + branch_pt_score + caat_score + ctcf_score + tata_score
@@ -220,15 +220,18 @@ class PosWeightProfiler:
         :param flank2:
         :param ref_vcf:
         :param alt_vcf:
+        :param threshold: input as percentile
         :return: quantity [0] and score delta [1]
         """
         full_ref = flank1 + ref_allele + flank2
         full_alt = flank1 + alt_allele + flank2
 
+        calc_threshold = PosWeightProfiler.get_threshold(pwm, threshold)
+
         # get results first
         motif_length = pwm.shape[0]
-        ref_motif_idxs, ref_motif_scores = PosWeightProfiler.probability_all_pos(full_ref, motif_length, pwm, threshold)
-        alt_motifs_idxs, alt_motif_scores = PosWeightProfiler.probability_all_pos(full_alt, motif_length, pwm, threshold)
+        ref_motif_idxs, ref_motif_scores = PosWeightProfiler.probability_all_pos(full_ref, motif_length, pwm, calc_threshold)
+        alt_motifs_idxs, alt_motif_scores = PosWeightProfiler.probability_all_pos(full_alt, motif_length, pwm, calc_threshold)
 
         # === quantity delta ===
         motif_quantity_delta = len(alt_motifs_idxs) - len(ref_motif_idxs)
@@ -269,7 +272,7 @@ class PosWeightProfiler:
         return scores.sum()
 
     @staticmethod
-    def probability_all_pos(sequence, motif_size, pwm, threshold):
+    def probability_all_pos(sequence, motif_size, pwm, motif_threshold):
         """
         Performs sliding window and returns list of indices that are likely to contain the motif
         :param full sequence:
@@ -281,7 +284,7 @@ class PosWeightProfiler:
         idxs, scores = [], []
         for i in range(seq_len - motif_size + 1):
             score = PosWeightProfiler.probability_subseq(sequence[i:i + motif_size], pwm)
-            if score > threshold:
+            if score > motif_threshold:
                 idxs.append(i)
                 scores.append(score)
         return idxs, scores
@@ -333,3 +336,29 @@ class PosWeightProfiler:
     @staticmethod
     def non_ambi_seq(seq):
         return ''.join(random.choice(IUPAC_CODES[char]) for char in seq)
+
+
+    @staticmethod
+    def get_threshold(pwm, threshold):
+        """
+        Calculate threshold based on PWM min/max scores
+        :param pwm:
+        :param threshold: input this as a percentile e.g. 0.75 for 75%
+        :return:
+        """
+        background_prob = 0.25
+
+        theoretical_max = 0
+        theoretical_min = 0
+
+        for position in range(pwm.shape[0]):
+            position_nums = pwm[position]
+            position_num_safe = np.maximum(position_nums, 1e-10)
+            log_odds = np.log2(position_num_safe / background_prob)
+
+            theoretical_max += np.max(log_odds)
+            theoretical_min += np.min(log_odds)
+
+        motif_spec_threshold = theoretical_min + (threshold *(theoretical_max - theoretical_min))
+
+        return motif_spec_threshold

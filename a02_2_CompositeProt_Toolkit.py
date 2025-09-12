@@ -251,7 +251,7 @@ class CompositeProt:
         :param fp_row:
         :return:
         """
-        ref_protein_list, alt_protein_list, non_ambiguous_ref, non_ambiguous_alt, ref_protein_list = fp_row
+        ref_protein_list, alt_protein_list, non_ambiguous_ref, non_ambiguous_alt, ref_protein_length = fp_row
         config = global_config
 
         profile = self.structural_profile(ref_protein_list, alt_protein_list, non_ambiguous_ref, non_ambiguous_alt,

@@ -24,6 +24,44 @@ def keystone_extract_proteins(model = model_name):
         raise
 
 
+def ks_dna_profile(model = model_name):
+    # 12-13 minutes
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success = test.generate_dna_profile()
+            if success:
+                print("[DNA Profile Completed]")
+    except Exception as e:
+        print(f"DNA Fingerprint Generation Failed: {e}")
+        raise
+
+
+def ks_prot_profile(model = model_name):
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success = test.generate_prot_profile()
+            if success:
+                print("[Protein Profile Completed]")
+    except Exception as e:
+        print(f"Protein Fingerprint Generation Failed: {e}")
+        raise
+
+
+def ks_pwm_profile(model = model_name):
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success  = test.generate_pwm_profile()
+            if success:
+                print("[PWM Profile Completed]")
+    except Exception as e:
+        print(f"PWM Fingerprint Generation Failed: {e}")
+        raise
+
+ks_pwm_profile()
+
 
 def keystone_dataframe_generation(ml_modelname=model_name):
     # this process takes around 3 hours 40 generally depending on background tasks

@@ -164,25 +164,18 @@ START = ["ATG", "CTC", "CTG", "TTG"]
 STOPS = ["TAA", "TAG", "TGA"]
 
 # keep this just in case
-DNA_RIGID_TFs = ['TATAAA',                        # TATA box - promoter stability
-                'GGGCGG',                         # GC-box (SP1 binding)
+DNA_RIGID_TFs = ['TATAAA',                        # TATA box - promoter stability - pwm
+                'GGGCGG',                         # GC-box (SP1 binding) - pwm
                 '[GC]{6,}',                       # not really a TF but promotes stability
-                'GGCCAATCT',                      # CAAT box
-                'TGACTCA',                        # AP-1
-                'GGG(A|G)(A|G)(C|T)(C|T)CC',      # NF-κB consensus: GGGRNNYYCC
-                'TGACGTCA',                       # CREB / CRE
-                'ATGCAAAT',                       # Octamer (Oct-1/2)
-                'CACGTG',                         # E-box (Myc/CLOCK)
-                '[AG]{3}C[AT]{2}[CT]{3}',         # p53 half-site
-                'GATA',                           # GATA family
-                'TTGC..AA']                       # C/EBP]
-
-
-POLY_TRACTS = ['A{6,}', 'C{6,}', 'G{6,}', 'T{6,}', '(?:AT){4,}']
-# poly tracts
-# AT dinucleotide repeat - prone to slippage
-
-INTRON = "GT[ATCG]{1,10}TACTAAC[ATCG]{1,10}AC"
+                'GGCCAATCT',                      # CAAT box - pwm
+                'TGACTCA',                        # AP-1 - not yet
+                'GGG(A|G)(A|G)(C|T)(C|T)CC',      # NF-κB consensus: GGGRNNYYCC - not yet
+                'TGACGTCA',                       # CREB / CRE - not yet
+                'ATGCAAAT',                       # Octamer (Oct-1/2) - not yet
+                'CACGTG',                         # E-box (Myc/CLOCK) - not yet
+                '[AG]{3}C[AT]{2}[CT]{3}',         # p53 half-site - not yet
+                'GATA',                           # GATA family - not yet
+                'TTGC..AA']                       # C/EBP] - not yet
 
 
 # 2 ====[PROTEIN DATA]====
@@ -366,3 +359,22 @@ ALL_AA_COMBINATIONS = [
     'GCA', 'GCT', 'GCC', 'GCG',
     'GGA', 'GGT', 'GGC', 'GGG',
 ]
+
+
+# MOTIFS for PosWeightProfiler - these are all going to have scores of 1
+POLY_TRACTS = ['A{6,}', 'C{6,}', 'G{6,}', 'T{6,}', '(?:AT){4,}']
+# poly tracts
+# AT dinucleotide repeat - prone to slippage
+
+# Nuclear Localization Signal
+NLS = ['[KR]{4,}', 'K[KR].[KR]',   # Monopartite class 1 and 2 consensus
+       '[KR]{2}.{10,12}(?:[KR]{3}[A-Z]{2}|[KR]{4}[A-Z]|[KR]{5})',  # Bipartite
+       'KR.[WFY]..AF', '[PR]..KR[KR]',  # Noncanonical importin a, class 3 and 4
+       'R{3,}', '[KRH].{2,5}PY']  # Noncanonical importin b
+
+# Nuclear Export Signal
+NES = ['L.{2,3}[LIVFM].{2,3}L.[LI]']
+
+INTRON = "GT[ATCG]{1,10}TACTAAC[ATCG]{1,10}AC"
+
+

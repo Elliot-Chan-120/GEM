@@ -20,16 +20,6 @@ from multiprocessing import Pool
 from b00_bio_library import COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON
 
 
-# === load up motif PWMs globally for repeated reference ===
-motif_path = Path('database/pwm_database')
-splice_3_pwm = np.loadtxt(motif_path / '3_splice_pwm.txt')  # human donor splice site (3')
-splice_5_pwm = np.loadtxt(motif_path / '5_splice_pwm.txt')  # human acceptor splice site (5')
-branch_pt_pwm = np.loadtxt(motif_path / 'branch_pt_pwm.txt')  # human branch point -> took image from study and ran it through AI to reconstruct PWM, take this w/ grain of salt
-
-# simple transcription factors
-ctcf_pwm = np.loadtxt(motif_path / 'CTCF_TF_pwm.txt')  # CTCF transcription factor
-caat_pwm = np.loadtxt(motif_path / 'CAAT_pwm.txt')  # CAAT box TF
-tata_pwm = np.loadtxt(motif_path / 'TATA_pwm.txt')  # TATA box TF
 
 global_config = {}
 

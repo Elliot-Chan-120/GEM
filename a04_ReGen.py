@@ -11,7 +11,7 @@ import sklearn
 # file imports - will need more thorough error handling later on
 from a02_1_CompositeDNA_Toolkit import CompositeDNA
 from a02_2_CompositeProt_Toolkit import CompositeProt
-from a02_3_PosWeightProfiler import PosWeightProfiler
+from a02_3_CompositeProfiler_Toolkit import CompositeProfiler
 from a03_LookingGlass import LookingGlass
 from b00_bio_library import ALL_AA_COMBINATIONS
 from b01_utility import custom_parse
@@ -56,7 +56,7 @@ class ReGen:
         # Load analysis modules
         self.DNA_module = CompositeDNA()
         self.Prot_module = CompositeProt()
-        self.PWM_module = DNAMatrixProfile()
+        self.PWM_module = PosWeightProfiler()
 
         # Load possible modifications
         self.nt_database = ALL_AA_COMBINATIONS
@@ -237,8 +237,8 @@ class ReGen:
         df = variant_dataframe.copy()
         dna_df = self.DNA_module.gen_DNAfp_dataframe(df)
         prot_df = self.Prot_module.gen_AAfp_dataframe(df)
-        pwm_df = self.PWM_module.gen_DNApwm_dataframe(df)
-        return pd.concat([dna_df, prot_df], axis=1)
+        pwm_df = self.PWM_module.gen_PWM_dataframe(df)
+        return pd.concat([dna_df, prot_df, pwm_df], axis=1)
 
     def benign_score(self, muta_fingerprint):
         predictions = self.model.predict_proba(muta_fingerprint.drop(['ClinicalSignificance'], axis=1))[:, 0]

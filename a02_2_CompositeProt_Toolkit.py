@@ -169,7 +169,6 @@ class CompositeProt:
                                    axis=1)  # axis = 1 to concatenate column wise (side by side)
 
         # don't drop anything, we want to keep clinical significance for future analyis
-
         return fingerprint_df
 
     def gen_AAfp_dataframe(self, dataframe):
@@ -204,7 +203,7 @@ class CompositeProt:
     #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     def AA_finder_wrapper(self, fp_row):
         """
-        Finds most likely amino acid sequence to be made
+        Finds most likely amino acid sequences to be made in both ref and alt strings - returns list and full string format
         :param fp_row:
         :return:
         """
@@ -227,22 +226,19 @@ class CompositeProt:
 
         # make it all into a string, replace ambiguous cases with the most likely / first amino acid
         # - too computationally expensive to take into account ambiguous cases with these long sequences
-        non_ambiguous_ref = self.nonambi_prot(ref_sequence)
-        non_ambiguous_alt = self.nonambi_prot(alt_sequence)
+        non_ambiguous_ref = self.nonambi_prot(ref_protein_list)
+        non_ambiguous_alt = self.nonambi_prot(alt_protein_list)
 
-        # will need this for a future feature interaction
-        ref_protein_length = len(non_ambiguous_ref)
 
         AA_sequence_profile = {
             'ref_protein_list': ref_protein_list,
             'alt_protein_list': alt_protein_list,
             'non_ambiguous_ref': non_ambiguous_ref,
             'non_ambiguous_alt': non_ambiguous_alt,
-            'ref_protein_length': ref_protein_length,
+            'ref_protein_length': len(non_ambiguous_ref),
+            'alt_protein_length': len(non_ambiguous_alt),
         }
-
         return AA_sequence_profile
-
 
 
     def AA_fingerprinter_wrapper(self, fp_row):
@@ -491,7 +487,7 @@ class CompositeProt:
         """
         Translates a given DNA sequence into its amino acid chain form as a list.
         The list format is to help handle ambiguous cases, where we can nest another list of all possible amino acids
-        from that ambiguous codon -> an average values in downstream calculations
+        from that ambiguous codon -> an average value in downstream calculations
         :param sequence:
         :return:
         """
@@ -506,7 +502,13 @@ class CompositeProt:
             if any(char in AMBIGUOUS for char in codon):
                 possible_nucleotides = [IUPAC_CODES[base] for base in codon]
                 possible_codons = [''.join(nt) for nt in product(*possible_nucleotides)]
-                protein_sequence.append([global_config['codon_map'][cod] for cod in possible_codons if cod not in STOPS])
+                possible_AAs = [global_config['codon_map'][cod] for cod in possible_codons if cod not in STOPS]
+                if not possible_AAs:
+                    if len(protein_sequence) == 0:
+                        continue
+                    else:
+                        break
+                protein_sequence.append(possible_AAs)
             else:
                 protein_sequence.append(global_config['codon_map'][codon])
         return protein_sequence

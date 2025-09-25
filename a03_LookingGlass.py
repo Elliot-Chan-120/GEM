@@ -9,6 +9,7 @@ import sklearn
 
 from a02_1_CompositeDNA_Toolkit import CompositeDNA
 from a02_2_CompositeProt_Toolkit import CompositeProt
+from a02_3_CompositeProfiler_Toolkit import CompositeProfiler
 from b01_utility import custom_parse
 
 
@@ -40,17 +41,20 @@ class LookingGlass:
         with CompositeDNA() as dna_module:
             dna_df = dna_module.gen_DNAfp_dataframe(dataframe)
 
-
         # ==[Protein data]==
         with CompositeProt() as prot_module:
             prot_df = prot_module.gen_AAfp_dataframe(dataframe)
+
+        with PosWeightProfiler() as pwm_module:
+            pwm_df = pwm_module.gen_PWM_dataframe(dataframe)
 
         # [[Save DataFrame]]
         # ensure alignment - in case something goes wrong with one of them
         dna_df.index = dataframe.index
         prot_df.index = dataframe.index
+        pwm_df.index = dataframe.index
 
-        variant_df = pd.concat([dna_df, prot_df], axis=1)
+        variant_df = pd.concat([dna_df, prot_df, pwm_df], axis=1)
 
         return variant_df
 

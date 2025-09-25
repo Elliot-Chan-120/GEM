@@ -4,13 +4,13 @@ from a04_ReGen import ReGen
 
 model_name = "ReGEN_v3"
 
-# for some reason use this
+# all functions with a name guard need to be called alone
+
 def keystone_dataframe_processing(ml_modelname=model_name):
     test = KeyStone(ml_modelname)
     test.naive_dataframe()
     test.decompress_genome()
     test.context_dataframe()
-
 
 def keystone_extract_proteins(model = model_name):
     test = KeyStone(model)
@@ -22,7 +22,6 @@ def keystone_extract_proteins(model = model_name):
     except Exception as e:
         print(f"Mutation Fingerprint Generation Failed: {e}")
         raise
-
 
 def ks_dna_profile(model = model_name):
     # 12-13 minutes
@@ -36,7 +35,6 @@ def ks_dna_profile(model = model_name):
         print(f"DNA Fingerprint Generation Failed: {e}")
         raise
 
-
 def ks_prot_profile(model = model_name):
     test = KeyStone(model)
     try:
@@ -48,8 +46,8 @@ def ks_prot_profile(model = model_name):
         print(f"Protein Fingerprint Generation Failed: {e}")
         raise
 
-
 def ks_pwm_profile(model = model_name):
+    #
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
@@ -60,41 +58,33 @@ def ks_pwm_profile(model = model_name):
         print(f"PWM Fingerprint Generation Failed: {e}")
         raise
 
-ks_pwm_profile()
-
-
-def keystone_dataframe_generation(ml_modelname=model_name):
-    # this process takes around 3 hours 40 generally depending on background tasks
-    # [Generating DNA PWM motif fingerprints]: 100%|██████████| 382937/382937 [1:45:51<00:00, 60.29it/s]
+def keystone_merge_datasects(ml_modelname=model_name):
     # [Generating DNA mutation fingerprints]: 100%|██████████| 378862/378862 [13:19<00:00, 473.69it/s]
     # [Generating AA chain mutation fingerprints]: 100%|██████████| 378862/378862 [1:30:27<00:00, 69.81it/s]
     test = KeyStone(ml_modelname)
 
     try:
         if __name__ == "__main__":
-            success = test.generate_fp()
+            success = test.get_final_dataframe()
             if success:
                 print("[Fingerprint DataFrame Generation Completed]")
     except Exception as e:
         print(f"Mutation Fingerprint Generation Failed: {e}")
         raise
 
-
 def keystone_model_training(ml_modelname=model_name):
     # this process generally takes 2+ hours depending on background tasks
     test = KeyStone(ml_modelname)
     test.train_models()
-
 
 def LookingGlass_Demo(fasta_filename='test.fasta', ml_model=model_name, output_filename='Screen_test_1'):
     test_module = LookingGlass(fasta_filename, ml_model)
     if __name__ == "__main__":
         test_module.predict_file(output_filename)
 
-
 def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, outfile_name='benchmark_repair_test'):
     if __name__ == "__main__":
         module = ReGen(pathogenic_gene_file, ml_model, outfile_name)
         module.repair()
 
-
+keystone_model_training()

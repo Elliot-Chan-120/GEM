@@ -4,7 +4,8 @@ from pyfaidx import Fasta
 
 from a02_1_CompositeDNA_Toolkit import *
 from a02_2_CompositeProt_Toolkit import *
-from a02_3_CompositeProfiler_Toolkit import *
+from a02_3_DNAProfiler_Toolkit import *
+from a02_4_ProtProfiler_Toolkit import *
 
 import optuna
 from xgboost import XGBClassifier
@@ -28,9 +29,10 @@ class KeyStone:
 
         # Navigation
         self.database = Path(self.cfg['database_folder'])  # main database folder
-        self.clinvar_data = self.database / self.cfg['clinvar_data']
-        self.genome_gz = self.database / self.cfg['GRCh38_gz']
-        self.genome_decomp = self.database / self.cfg['GRCh38_fna']
+        self.datacore = self.database / self.cfg['datacore_folder']
+        self.clinvar_data = self.datacore / self.cfg['clinvar_data']
+        self.genome_gz = self.datacore / self.cfg['GRCh38_gz']
+        self.genome_decomp = self.datacore / self.cfg['GRCh38_fna']
 
         self.naivefile_df_outpath = self.database / f"{self.cfg['ref_alt_df']}.csv"
         self.context_df_outpath = self.database / f"{self.cfg['context_df']}.pkl"
@@ -39,7 +41,9 @@ class KeyStone:
         self.composite_dataframe = self.database / f"{self.cfg['composite_df']}.pkl"
         self.dna_profile_df = self.database / f"{self.cfg['dna_profile']}.pkl"
         self.prot_profile_df = self.database / f"{self.cfg['prot_profile']}.pkl"
-        self.pwm_profile_df = self.database / f"{self.cfg['pwm_profile']}.pkl"
+
+        self.dna_pwm_profile_df = self.database / f"{self.cfg['dna_pwm_profile']}.pkl"
+        self.aa_pwm_profile_df = self.database / f"{self.cfg['aa_pwm_profile']}.pkl"
 
         # final dataframe for model training
         self.final_df_path = self.database / f"{self.cfg['full_variant_df']}.pkl"
@@ -246,22 +250,36 @@ class KeyStone:
         return True
 
     # [4]
-    def generate_pwm_profile(self):
+    def generate_dnapwm_profile(self):
         with open(self.composite_dataframe, 'rb') as infile:
             df = pkl.load(infile)
 
         # managed to optimize processing time from 3-4 hours to 20-30 minutes with 4x the motifs...
-        with CompositeProfiler() as dna_pwm_module:
-            dna_pwm_df = dna_pwm_module.gen_PWM_dataframe(df)
+        with DNAMatrix() as dna_pwm_module:
+            dna_pwm_df = dna_pwm_module.gen_DNAPWM_dataframe(df)
         dna_pwm_df.index = df.index  # ensure index alignment
 
-        with open(self.pwm_profile_df, 'wb') as outfile:
+        with open(self.dna_pwm_profile_df, 'wb') as outfile:
             pkl.dump(dna_pwm_df, outfile)
         return True
 
 
+    def generate_aapwm_profile(self):
+        with open(self.composite_dataframe, 'rb') as infile:
+            df = pkl.load(infile)
+
+        # managed to optimize processing time from 3-4 hours to 20-30 minutes with 4x the motifs...
+        with ProtMatrix() as aa_pwm_module:
+            aa_pwm_df = aa_pwm_module.gen_AAPWM_dataframe(df)
+        aa_pwm_df.index = df.index  # ensure index alignment
+
+        with open(self.aa_pwm_profile_df, 'wb') as outfile:
+            pkl.dump(aa_pwm_df, outfile)
+        return True
+
+
     def get_final_dataframe(self):
-        filepaths = [self.dna_profile_df, self.prot_profile_df, self.pwm_profile_df]
+        filepaths = [self.dna_profile_df, self.prot_profile_df, self.dna_pwm_profile_df, self.aa_pwm_profile_df]
 
         for p in filepaths:
             path = Path(p)
@@ -273,7 +291,8 @@ class KeyStone:
         dfs = [
             pd.read_pickle(self.dna_profile_df),
             pd.read_pickle(self.prot_profile_df),
-            pd.read_pickle(self.pwm_profile_df),
+            pd.read_pickle(self.dna_pwm_profile_df),
+            pd.read_pickle(self.aa_pwm_profile_df),
         ]
 
         variant_final_df = pd.concat(dfs, axis=1)
@@ -331,30 +350,30 @@ class KeyStone:
                                                             random_state=42)
 
         # == Hyperparameter Optimization ==
-        tuner = optuna.samplers.TPESampler(n_startup_trials=50, seed=42)  # will learn from previous trials
-        pruner = optuna.pruners.MedianPruner(n_startup_trials=30, n_warmup_steps=10)
+        # tuner = optuna.samplers.TPESampler(n_startup_trials=50, seed=42)  # will learn from previous trials
+        # pruner = optuna.pruners.MedianPruner(n_startup_trials=30, n_warmup_steps=10)
+        #
+        # class_counts = y.value_counts()
+        # scale_pos_weight = class_counts[0] / class_counts[1]
+        #
+        # study = optuna.create_study(direction='maximize',
+        #                             sampler = tuner,
+        #                             pruner = pruner)
+        #
+        # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=175)
+        # best_params = study.best_params
 
-        class_counts = y.value_counts()
-        scale_pos_weight = class_counts[0] / class_counts[1]
-
-        study = optuna.create_study(direction='maximize',
-                                    sampler = tuner,
-                                    pruner = pruner)
-
-        study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=175)
-        best_params = study.best_params
-
-        # best_params = {'n_estimators': 1970,
-        #                'max_depth': 10,
-        #                'learning_rate': 0.027720408141759193,
-        #                'subsample': 0.9784104549508957,
-        #                'colsample_bytree': 0.673586316078419,
-        #                'colsample_bylevel': 0.5725822207021473,
-        #                'reg_alpha': 1.8884595497677368,
-        #                'reg_lambda': 1.5689838882252536,
-        #                'gamma': 0.0697838604964203,
-        #                'min_child_weight': 3,
-        #                'scale_pos_weight': 1.02340555884088}
+        best_params = {'n_estimators': 1692,
+                       'max_depth': 10,
+                       'learning_rate': 0.029625184360382837,
+                       'subsample': 0.8368865392296614,
+                       'colsample_bytree': 0.9535892593209028,
+                       'colsample_bylevel': 0.8600713855914001,
+                       'reg_alpha': 0.08665015860965015,
+                       'reg_lambda': 3.5581774984777685,
+                       'gamma': 2.5540583926468226,
+                       'min_child_weight': 5,
+                       'scale_pos_weight': 3.8285163516486533}
 
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
@@ -364,7 +383,9 @@ class KeyStone:
         from sklearn.model_selection import StratifiedKFold
         from sklearn.metrics import roc_auc_score, precision_recall_curve, auc, f1_score
 
-        print(f"Optimal Hyperparameters: {parameters}")
+        content = ""
+
+        content += f"Optimal Hyperparameters: {parameters}\n"
 
         strat_fold = StratifiedKFold(n_splits = 5, shuffle=True)
 
@@ -394,8 +415,8 @@ class KeyStone:
             roc_scores.append(roc_auc_score(y_val, y_pred_proba))
             pr_scores.append(auc(recall, precision))
 
-        print(f"Cross Validation Results: Mean ROC AUC: {np.mean(roc_scores):.4f}, Mean PR AUC: {np.mean(pr_scores):.4f}")
-        print(f"Mean FNs: {np.mean(fn_counts):.2f}, Mean FPs: {np.mean(fp_counts):.2f}")
+        content += f"Cross Validation Results: Mean ROC AUC: {np.mean(roc_scores):.4f}, Mean PR AUC: {np.mean(pr_scores):.4f}\n"
+        content += f"Mean FNs: {np.mean(fn_counts):.2f}, Mean FPs: {np.mean(fp_counts):.2f}\n"
 
         # Train on full data and evaluate on test set
         model.fit(X_train, y_train)
@@ -418,22 +439,33 @@ class KeyStone:
         y_pred_optimal = (y_pred_proba >= optimal_threshold).astype(int)
 
 
-        print(f"ROC AUC: {roc_auc:.4f}")
-        print(f"Precision-Recall AUC: {pr_auc:.4f}")
-        print(f"Pathogenic F1-Score: {pathogenic_f1:.4f}")
-        print(f"Optimal threshold for pathogenic detection: {optimal_threshold:.3f}")
+        content += f"ROC AUC: {roc_auc:.4f}\n"
+        content += f"Precision-Recall AUC: {pr_auc:.4f}\n"
+        content += f"Pathogenic F1-Score: {pathogenic_f1:.4f}\n"
+        content += f"Optimal threshold for pathogenic detection: {optimal_threshold:.3f}\n"
 
-        print("Performance with optimal threshold:")
-        print(classification_report(y_test, y_pred_optimal))
+        content += "Performance with optimal threshold:\n"
+        content += classification_report(y_test, y_pred_optimal)
 
         cm = confusion_matrix(y_test, y_pred_optimal, labels=[0, 1])
-        print("Confusion Matrix:")
-        print(cm)
+        content += "Confusion Matrix:\n"
+        content += str(cm)
+        content += "\n"
 
-        display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Benign', 'Pathogenic'])
-        display.plot()
+        feature_importances = model.feature_importances_
+        featimp_df = pd.DataFrame({
+            "Feature": X_train.columns,
+            "Importance": feature_importances,
+        })
+
+        featimp_df = featimp_df.sort_values(by="Importance", ascending=True)
+
+        for _, row in featimp_df.iterrows():
+            content += f"{row['Feature']}: {row['Importance']:.4f}\n"
 
         savepath = self.model_path / f"{self.model_name}.pkl"
+        statpath = self.model_path / f"{self.model_name}_stats.txt"
+        statpath.write_text(content)
         if os.path.exists(savepath):
             print(f"Model {self.model_name} already exists. Skipping save to prevent overwrite")
         else:

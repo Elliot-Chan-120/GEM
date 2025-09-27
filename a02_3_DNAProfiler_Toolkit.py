@@ -28,7 +28,7 @@ def config_init(config, ambiguous, iupac_codes, nls, nes):
 
 
 
-class CompositeProfiler:
+class DNAMatrix:
     """
     Motif scanning class - scans various motifs on both DNA and protein level
     """
@@ -43,7 +43,6 @@ class CompositeProfiler:
 
         motif_database = self.root / self.cfg['database_folder'] / self.cfg['pwm_folder']
         dna_motif_path = motif_database / self.cfg['dna_motifs']
-        aa_motif_path = motif_database / self.cfg['aa_motifs']
 
         # === load up motif PWMs globally for repeated reference ===
         # [DNA PWMs]
@@ -55,21 +54,6 @@ class CompositeProfiler:
         ctcf_pwm = np.loadtxt(dna_motif_path / 'CTCF_TF_pwm.txt')  # CTCF transcription factor
         caat_pwm = np.loadtxt(dna_motif_path / 'CAAT_pwm.txt')  # CAAT box TF
         tata_pwm = np.loadtxt(dna_motif_path / 'TATA_pwm.txt')  # TATA box TF
-
-
-        # [AA PWMs]
-        # [post-translational modification domains]
-        cdkphos_mod_pwm = np.loadtxt(aa_motif_path / 'MOD_CDK_SPxK_pwm.txt')  # - Phosphorylation
-        camppka_pwm = np.loadtxt(aa_motif_path / 'cAMP_pka_pwm.txt')
-        ck2_pwm = np.loadtxt(aa_motif_path / 'ck2_pwm.txt')
-        tyr_csk_pwm = np.loadtxt(aa_motif_path / 'tyr_csk_pwm.txt')
-
-        ngly_1_pwm = np.loadtxt(aa_motif_path / 'mod_ngly_1_pwm.txt')  # - Glycosylation
-        ngly_2_pwm = np.loadtxt(aa_motif_path / 'mod_ngly_2_pwm.txt')
-
-        dbox_pwm = np.loadtxt(aa_motif_path / 'dbox_pwm.txt') # - Ubiquitination
-        kenbox_pwm = np.loadtxt(aa_motif_path / 'kenbox_pwm.txt')
-
 
 
         # create config for downstream multiproc - these get added to global_config -> e.g. pwm = global_config['pwm_name_here']
@@ -84,28 +68,13 @@ class CompositeProfiler:
             'caat_pwm': caat_pwm,
             'tata_pwm': tata_pwm,
 
-            # Protein motifs
-            # - Phosphorylation motifs
-            'cdkphos_pwm': cdkphos_mod_pwm,
-            'camppka_pwm': camppka_pwm,
-            'ck2_pwm': ck2_pwm,
-            'tyrcsk_pwm': tyr_csk_pwm,
-
-            # - Glycosylation motifs -- Had way too much trouble trying to find more
-            'ngly_1_pwm': ngly_1_pwm,
-            'ngly_2_pwm': ngly_2_pwm,
-
-            # - Ubiquitination motifs
-            'dbox_pwm': dbox_pwm,
-            'kenbox_pwm': kenbox_pwm,
-
         }
 
         # define number of cores
         self.core_num = core_num if core_num is not None else multiprocessing.cpu_count() - 2
 
         # initialize pool if not already initialized
-        if CompositeProfiler._pool is None:
+        if DNAMatrix._pool is None:
             self.initialize_pool()
 
 
@@ -115,8 +84,8 @@ class CompositeProfiler:
         """
         core_num = self.core_num
 
-        if CompositeProfiler._pool is None:
-            CompositeProfiler._pool = multiprocessing.Pool(
+        if DNAMatrix._pool is None:
+            DNAMatrix._pool = multiprocessing.Pool(
                 processes = core_num,
                 initializer = config_init,
                 initargs=(self.config, AMBIGUOUS, IUPAC_CODES, NLS, NES)
@@ -126,10 +95,10 @@ class CompositeProfiler:
         """
         Terminate multiprocessing pool when no longer needed
         """
-        if CompositeProfiler._pool is not None:
-            CompositeProfiler._pool.close()
-            CompositeProfiler._pool.join()
-            CompositeProfiler._pool = None
+        if DNAMatrix._pool is not None:
+            DNAMatrix._pool.close()
+            DNAMatrix._pool.join()
+            DNAMatrix._pool = None
 
     def __enter__(self):
         self.initialize_pool()
@@ -142,7 +111,7 @@ class CompositeProfiler:
 
     # ====[[PWM MOTIF FINGERPRINT DATAFRAME]]====
     @staticmethod
-    def gen_PWM_dataframe(dataframe):
+    def gen_DNAPWM_dataframe(dataframe):
         """
         Uses persistent mp pool to generate DNA mutation data fingerprint
         :param dataframe:
@@ -150,16 +119,15 @@ class CompositeProfiler:
         """
         fingerprint_rows = [
             (row['Chromosome'], row['ReferenceAlleleVCF'],
-             row['AlternateAlleleVCF'], row['Flank_1'], row['Flank_2'],
-             row['non_ambiguous_ref'], row['non_ambiguous_alt'])
+             row['AlternateAlleleVCF'], row['Flank_1'], row['Flank_2'])
             for _, row in dataframe.iterrows()
         ]
 
         fingerprint_rows = list(tqdm(
             # pool.imap method applies function self.PWM_profile_wrapper to each row in fingerprint_rows
-            CompositeProfiler._pool.imap(CompositeProfiler.PWM_profile_wrapper, fingerprint_rows),
+            DNAMatrix._pool.imap(DNAMatrix.PWM_profile_wrapper, fingerprint_rows),
             total=len(fingerprint_rows),
-            desc="[Generating motif fingerprints]"
+            desc="[Generating DNA motif fingerprints -- Gaussian-weighted composite scoring]"
         ))
 
         fingerprint_df = pd.DataFrame(fingerprint_rows)
@@ -167,7 +135,7 @@ class CompositeProfiler:
                                    axis=1)  # axis = 1 to concatenate column wise (side by side)
 
         fingerprint_df = fingerprint_df.drop(['Chromosome', 'ClinicalSignificance', 'ReferenceAlleleVCF',
-                                              'AlternateAlleleVCF', 'Flank_1', 'Flank_2', 'non_ambiguous_ref', 'non_ambiguous_alt'], axis=1)
+                                              'AlternateAlleleVCF', 'Flank_1', 'Flank_2'], axis=1)
 
         return fingerprint_df
 
@@ -178,13 +146,10 @@ class CompositeProfiler:
         :param DNA dataframe fp_row:
         :return:
         """
-        chromosome, ref_allele, alt_allele, flank_1, flank_2, ref_protein, alt_protein = fp_row
+        chromosome, ref_allele, alt_allele, flank_1, flank_2 = fp_row
 
         fp = {}
-        fp.update(CompositeProfiler.DNA_pwm_profile(flank_1, flank_2, ref_allele, alt_allele))
-
-        # honestly need to somehow make this better, right now it decreases performance
-        fp.update(CompositeProfiler.AA_pwm_profile(ref_protein, alt_protein))
+        fp.update(DNAMatrix.DNA_pwm_profile(flank_1, flank_2, ref_allele, alt_allele))
 
         return fp
 
@@ -216,28 +181,28 @@ class CompositeProfiler:
 
         # [2] get counts and scores of each motif listed
         # splice sites + branch points
-        sp3_count, sp3_score = CompositeProfiler.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+        sp3_count, sp3_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
                                                                global_config['splice_3_pwm'],
                                                                ref_section, alt_section, dna_alphabet)
 
-        sp5_count, sp5_score = CompositeProfiler.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+        sp5_count, sp5_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
                                                                global_config['splice_5_pwm'],
                                                                ref_section, alt_section, dna_alphabet)
 
-        branch_pt_count, branch_pt_score = CompositeProfiler.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+        branch_pt_count, branch_pt_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
                                                                            global_config['branch_pt_pwm'],
                                                                            ref_section, alt_section, dna_alphabet)
 
         # transcription factors
-        caat_count, caat_score = CompositeProfiler.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+        caat_count, caat_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
                                                                  global_config['caat_pwm'],
                                                                  ref_section, alt_section, dna_alphabet)
 
-        ctcf_count, ctcf_score = CompositeProfiler.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+        ctcf_count, ctcf_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
                                                                  global_config['ctcf_pwm'],
                                                                  ref_section, alt_section, dna_alphabet)
 
-        tata_count, tata_score = CompositeProfiler.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+        tata_count, tata_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
                                                                  global_config['tata_pwm'],
                                                                  ref_section, alt_section, dna_alphabet)
 
@@ -271,99 +236,6 @@ class CompositeProfiler:
 
 
     @staticmethod
-    def AA_pwm_profile(nonambi_prot_ref, nonambi_prot_alt):
-        """
-        :param nonambi_prot_ref:
-        :param nonambi_prot_alt:
-        :return:
-        """
-        # ====[PWM MOTIF DISRUPTIONS]====
-        # Combines gaussian scoring and pwm navigation to create a motif disruption score for each specific motif
-        # For now, let's see how impactful each motif search is going to be for XGBoost
-        aa_alphabet = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, 'I': 7,
-                       'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, 'R': 14,
-                       'S': 15, 'T': 16, 'V': 17, 'W': 18, 'Y': 19}
-
-        pwm_dict = {}
-
-        # === PHOSPHORYLATION ===
-        cdkphos_count, cdkphos_score = CompositeProfiler.AA_pwm_stats(global_config['cdkphos_pwm'],
-                                                                      nonambi_prot_ref, nonambi_prot_alt, aa_alphabet)
-        camppka_count, camppka_score = CompositeProfiler.AA_pwm_stats(global_config['camppka_pwm'],
-                                                                      nonambi_prot_ref, nonambi_prot_alt, aa_alphabet)
-        ck2_count, ck2_score = CompositeProfiler.AA_pwm_stats(global_config['ck2_pwm'],
-                                                              nonambi_prot_ref, nonambi_prot_alt, aa_alphabet)
-        tyrcsk_count, tyrcsk_score = CompositeProfiler.AA_pwm_stats(global_config['tyrcsk_pwm'],
-                                                                    nonambi_prot_ref, nonambi_prot_alt, aa_alphabet)
-
-        # === GLYCOSYLATION ===
-        ngly_1_count, ngly_1_score = CompositeProfiler.AA_pwm_stats(global_config['ngly_1_pwm'],
-                                                                    nonambi_prot_ref, nonambi_prot_alt, aa_alphabet)
-        ngly_2_count, ngly_2_score = CompositeProfiler.AA_pwm_stats(global_config['ngly_2_pwm'],
-                                                                    nonambi_prot_ref, nonambi_prot_alt,
-                                                                    aa_alphabet)
-
-        # === UBIQUITINATION ===
-        dbox_count, dbox_score = CompositeProfiler.AA_pwm_stats(global_config['dbox_pwm'],
-                                                                nonambi_prot_ref, nonambi_prot_alt, aa_alphabet)
-        kenbox_count, kenbox_score = CompositeProfiler.AA_pwm_stats(global_config['kenbox_pwm'],
-                                                                    nonambi_prot_ref, nonambi_prot_alt, aa_alphabet)
-
-
-        pwm_dict['cdkphos_count'] = cdkphos_count
-        pwm_dict['cdkphos_score'] = cdkphos_score
-
-        pwm_dict['camppka_count'] = camppka_count
-        pwm_dict['camppka_score'] = camppka_score
-
-        pwm_dict['ck2_count'] = ck2_count
-        pwm_dict['ck2_score'] = ck2_score
-
-        pwm_dict['tyrcsk_count'] = tyrcsk_count
-        pwm_dict['tyrcsk_score'] = tyrcsk_score
-
-
-        pwm_dict['phosphorylation_count_delta'] = cdkphos_count + camppka_count + ck2_count + tyrcsk_count
-        pwm_dict['phosphorylation_score_delta'] = cdkphos_score + camppka_score + ck2_score + tyrcsk_score
-
-
-        pwm_dict['ngly_1_count'] = ngly_1_count
-        pwm_dict['ngly_1_score'] = ngly_1_score
-
-        pwm_dict['ngly_2_count'] = ngly_2_count
-        pwm_dict['ngly_2_score'] = ngly_2_score
-
-
-        pwm_dict['glycosylation_count_delta'] = ngly_1_count + ngly_2_count
-        pwm_dict['glycosylation_score_delta'] = ngly_1_score + ngly_2_score
-
-
-        pwm_dict['dbox_count'] = dbox_count
-        pwm_dict['dbox_score'] = dbox_score
-
-        pwm_dict['kenbox_count'] = kenbox_count
-        pwm_dict['kenbox_score'] = kenbox_score
-
-
-        pwm_dict['ubiquitination_count_delta'] = dbox_count + kenbox_count
-        pwm_dict['ubiquitination_score_delta'] = dbox_score + kenbox_score
-
-
-        pwm_dict['AA_total_shift'] = (cdkphos_count + camppka_count + ck2_count +
-                                      tyrcsk_count + ngly_1_count + ngly_2_count +
-                                      dbox_count + kenbox_count)
-
-        pwm_dict['AA_score_shift'] = (cdkphos_score + camppka_score + ck2_score +
-                                      tyrcsk_score + ngly_1_score + ngly_2_score +
-                                      dbox_score + kenbox_score)
-
-        pwm_dict['NLS_delta'] = CompositeProfiler.regex_motif_delta(nonambi_prot_ref, nonambi_prot_alt, NLS)
-        pwm_dict['NES_delta'] = CompositeProfiler.regex_motif_delta(nonambi_prot_ref, nonambi_prot_alt, NES)
-
-        return pwm_dict
-
-
-    @staticmethod
     def DNA_pwm_stats(ref_vcf, alt_vcf, flank_length, pwm, ref_section, alt_section, alphabet):
         """
         CALL ON THIS for DNA sequences
@@ -380,8 +252,8 @@ class CompositeProfiler:
         search_start = flank_length - global_config['search_radius']
 
         motif_length = pwm.shape[0]
-        ref_motif_idxs, ref_motif_scores = CompositeProfiler.probability_all_pos(ref_section, motif_length, pwm, alphabet)
-        alt_motif_idxs, alt_motif_scores = CompositeProfiler.probability_all_pos(alt_section, motif_length, pwm, alphabet)
+        ref_motif_idxs, ref_motif_scores = DNAMatrix.probability_all_pos(ref_section, motif_length, pwm, alphabet)
+        alt_motif_idxs, alt_motif_scores = DNAMatrix.probability_all_pos(alt_section, motif_length, pwm, alphabet)
 
         # readjust indices back to full sequence coordinates before Gaussian weights
         ref_idxs_adjusted = [idx + search_start for idx in ref_motif_idxs]
@@ -395,10 +267,10 @@ class CompositeProfiler:
         ref_window_end = window_start + len(ref_vcf)
         alt_window_end = window_start + len(alt_vcf)
 
-        ref_weighted_score = CompositeProfiler.pos_weight_gaussian(ref_idxs_adjusted, ref_motif_scores,
+        ref_weighted_score = DNAMatrix.pos_weight_gaussian(ref_idxs_adjusted, ref_motif_scores,
                                                  window_start, ref_window_end, motif_length)
 
-        alt_weighted_score = CompositeProfiler.pos_weight_gaussian(alt_idxs_adjusted, alt_motif_scores,
+        alt_weighted_score = DNAMatrix.pos_weight_gaussian(alt_idxs_adjusted, alt_motif_scores,
                                                  window_start, alt_window_end, motif_length)
 
         position_score_delta = alt_weighted_score - ref_weighted_score
@@ -406,26 +278,6 @@ class CompositeProfiler:
 
         return motif_quantity_delta, position_score_delta
 
-
-    @staticmethod
-    def AA_pwm_stats(pwm, prot_ref, prot_alt, alphabet):
-        """
-        handles motif finding for amino acid sequences - no position weight scoring since we are taking the most likely protein to be produced with no coordinates
-        :param pwm:
-        :param prot_ref:
-        :param prot_alt:
-        :param alphabet:
-        :return:
-        """
-        motif_size = pwm.shape[0]
-
-        ref_motif_idxs, ref_motif_scores = CompositeProfiler.probability_all_pos(prot_ref, motif_size, pwm, alphabet)
-        alt_motif_idxs, alt_motif_scores = CompositeProfiler.probability_all_pos(prot_alt, motif_size, pwm, alphabet)
-
-        motif_quantity_delta = len(alt_motif_idxs) - len(ref_motif_idxs)
-        motif_score_delta = sum(alt_motif_scores) - sum(ref_motif_scores)
-
-        return motif_quantity_delta, motif_score_delta
 
     @staticmethod
     def probability_all_pos(sequence, motif_size, pwm, alphabet):
@@ -440,7 +292,7 @@ class CompositeProfiler:
         seq_len = len(sequence)
         idxs, scores = [], []
         for i in range(seq_len - motif_size + 1):  # proper search space handled
-            score = CompositeProfiler.probability_subseq(sequence[i:i + motif_size], pwm, alphabet)
+            score = DNAMatrix.probability_subseq(sequence[i:i + motif_size], pwm, alphabet)
             if score > 0.001:
                 idxs.append(i)
                 scores.append(score)
@@ -456,30 +308,21 @@ class CompositeProfiler:
         :param alphabet
         :return: probability float
         """
-        background_prob = 1 / len(alphabet)  # background can tell us if seq is DNA or AA
+        background_prob = 1 / len(alphabet)
 
-        if len(alphabet) != 4:  # if it's not DNA -> AA
-            nuc_idx = np.fromiter((alphabet[c] for c in subseq), dtype=np.int8)
-            probs = pwm[np.arange(len(subseq)), nuc_idx]
-            # handle 0s
+        total_score = 0
 
-            probs = np.maximum(probs, 1e-10)
-            scores = np.log2(probs / background_prob)
-            return scores.sum()
+        for i, base in enumerate(subseq):
+            if base in AMBIGUOUS:
+                possible_bases = IUPAC_CODES[base]
+                prob = sum(pwm[i][alphabet[b]] for b in possible_bases) / len(possible_bases)
+            else:
+                prob = pwm[i][alphabet[base]]
 
-        else:  # its DNA
-            total_score = 0
-            for i, base in enumerate(subseq):
-                if base in AMBIGUOUS:
-                    possible_bases = IUPAC_CODES[base]
-                    prob = sum(pwm[i][alphabet[b]] for b in possible_bases) / len(possible_bases)
-                else:
-                    prob = pwm[i][alphabet[base]]
+            prob = max(prob, 1e-10)
+            total_score += np.log2(prob / background_prob)
 
-                prob = max(prob, 1e-10)
-                total_score += np.log2(prob / background_prob)
-            return total_score
-
+        return total_score
 
 
     @staticmethod
@@ -495,13 +338,14 @@ class CompositeProfiler:
         """
         results = []
 
-        distances = CompositeProfiler.distance_from_window(idxs, vcf_start, vcf_end)
-        weights = CompositeProfiler.gaussian_eq(distances, motif_length)  # motif length is sigma
+        distances = DNAMatrix.distance_from_window(idxs, vcf_start, vcf_end)
+        weights = DNAMatrix.gaussian_eq(distances, motif_length)  # motif length is sigma
 
         for j in range(len(distances)):
             results.append(scores[j] * weights[j])
 
         return sum(results)
+
 
     @staticmethod
     def distance_from_window(idx_list, window_start, window_end):
@@ -520,12 +364,14 @@ class CompositeProfiler:
 
         return dist.tolist()
 
+
     @staticmethod
     def gaussian_eq(distances, sigma):
         distances = np.asarray(distances)
         weights = np.exp(-(distances**2) / (2 * sigma**2))
         weights[distances==0] = 1.0
         return weights
+
 
     @staticmethod
     def get_threshold(pwm, threshold):
@@ -555,7 +401,7 @@ class CompositeProfiler:
 
     @staticmethod
     def regex_motif_delta(nonambi_ref, nonambi_alt, regex_motif):
-        return CompositeProfiler.count_regex(nonambi_alt, regex_motif) - CompositeProfiler.count_regex(nonambi_ref, regex_motif)
+        return DNAMatrix.count_regex(nonambi_alt, regex_motif) - DNAMatrix.count_regex(nonambi_ref, regex_motif)
 
 
     @staticmethod

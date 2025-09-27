@@ -46,12 +46,24 @@ def ks_prot_profile(model = model_name):
         print(f"Protein Fingerprint Generation Failed: {e}")
         raise
 
-def ks_pwm_profile(model = model_name):
-    #
+def ks_dnapwm_profile(model = model_name):
+    # 40 minutes
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
-            success  = test.generate_pwm_profile()
+            success  = test.generate_dnapwm_profile()
+            if success:
+                print("[PWM Profile Completed]")
+    except Exception as e:
+        print(f"PWM Fingerprint Generation Failed: {e}")
+        raise
+
+def ks_aapwm_profile(model = model_name):
+    # 12 minutes
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success  = test.generate_aapwm_profile()
             if success:
                 print("[PWM Profile Completed]")
     except Exception as e:

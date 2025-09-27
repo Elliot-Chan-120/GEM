@@ -9,7 +9,8 @@ import sklearn
 
 from a02_1_CompositeDNA_Toolkit import CompositeDNA
 from a02_2_CompositeProt_Toolkit import CompositeProt
-from a02_3_CompositeProfiler_Toolkit import CompositeProfiler
+from a02_3_DNAProfiler_Toolkit import *
+from a02_4_ProtProfiler_Toolkit import *
 from b01_utility import custom_parse
 
 

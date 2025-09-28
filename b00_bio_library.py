@@ -377,4 +377,11 @@ NES = ['L.{2,3}[LIVFM].{2,3}L.[LI]']
 
 INTRON = "GT[ATCG]{1,10}TACTAAC[ATCG]{1,10}AC"
 
+HISTONE_DOMAINS = {
+    'H2A': ["[AC]GL.FPV"],
+    'H2B': ["[KR]E[LIVM][EQ]T.{2}[KR].[LIVM]{2}.[PAG][DE]L.[KR]HA[LIVM]"],
+    'H3': ["KAPRK[QH][LI]"],
+    'H4': ["GAKRH"]
+}
+
 

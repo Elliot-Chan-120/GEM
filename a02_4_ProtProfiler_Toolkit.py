@@ -14,17 +14,19 @@ from tqdm import tqdm
 import multiprocessing
 from multiprocessing import Pool
 
-from b00_bio_library import AMBIGUOUS, IUPAC_CODES, POLY_TRACTS, NLS, NES
+from b00_bio_library import AMBIGUOUS, IUPAC_CODES, NLS, NES, HISTONE_DOMAINS
+
+# current error
+# - need function to find list of all overlapping indexes for all regex motifs
+# - this is so the regex-specific clustering motifs can actually do what they need to
 
 global_config = {}
 
-def config_init(config, ambiguous, iupac_codes, nls, nes):
-    global global_config, AMBIGUOUS, IUPAC_CODES, NLS, NES
+def config_init(config, ambiguous, iupac_codes):
+    global global_config, AMBIGUOUS, IUPAC_CODES
     global_config = config
     AMBIGUOUS = ambiguous
     IUPAC_CODES = iupac_codes
-    NLS = nls
-    NES = nes
 
 
 
@@ -38,8 +40,6 @@ class ProtMatrix:
         self.root = Path(__file__).parent.resolve()
         with open(self.root / 'config.yaml', 'r') as outfile:
             self.cfg = yaml.safe_load(outfile)
-
-        self.search_radius = self.cfg['motif_search_radius']
 
         motif_database = self.root / self.cfg['database_folder'] / self.cfg['pwm_folder']
         aa_motif_path = motif_database / self.cfg['aa_motifs']
@@ -63,9 +63,11 @@ class ProtMatrix:
 
         # create config for downstream multiproc - these get added to global_config -> e.g. pwm = global_config['pwm_name_here']
         self.config = {
-            'search_radius': self.search_radius,
+            # Histone domain profile
+            'Histone_Domains': HISTONE_DOMAINS,
 
-            # Protein motifs
+
+            # Post-translational modification motifs
             # - Phosphorylation motifs
             'cdkphos_pwm': cdkphos_mod_pwm,
             'camppka_pwm': camppka_pwm,
@@ -80,6 +82,9 @@ class ProtMatrix:
             'dbox_pwm': dbox_pwm,
             'kenbox_pwm': kenbox_pwm,
 
+            # Nuclear export and import signals
+            'NES': NES,
+            'NLS': NLS,
         }
 
         # define number of cores
@@ -100,7 +105,7 @@ class ProtMatrix:
             ProtMatrix._pool = multiprocessing.Pool(
                 processes = core_num,
                 initializer = config_init,
-                initargs=(self.config, AMBIGUOUS, IUPAC_CODES, NLS, NES)
+                initargs=(self.config, AMBIGUOUS, IUPAC_CODES)
             )
 
     def terminate_pool(self):
@@ -162,13 +167,14 @@ class ProtMatrix:
         ref_protein, alt_protein = fp_row
 
         fp = {}
-        fp.update(ProtMatrix.AA_pwm_profile(ref_protein, alt_protein))
+        fp.update(ProtMatrix.PTM_profile(ref_protein, alt_protein))
+        fp.update(ProtMatrix.histone_profile(ref_protein, alt_protein))
 
         return fp
 
 
     @staticmethod
-    def AA_pwm_profile(nonambi_prot_ref, nonambi_prot_alt):
+    def PTM_profile(nonambi_prot_ref, nonambi_prot_alt):
         """
         :param nonambi_prot_ref:
         :param nonambi_prot_alt:
@@ -215,10 +221,10 @@ class ProtMatrix:
         pwm_dict.update(ubiq_dict)
 
         # identification of overall cluster disruption
-        pwm_dict['Total_cluster_delta'] = ProtMatrix.cluster_delta(total_ref_idxs, total_alt_idxs, total_ref_scores, total_alt_scores)
+        pwm_dict['Total_PTM_cluster_composite_delta'] = ProtMatrix.cluster_score_composite_delta(total_ref_idxs, total_alt_idxs, total_ref_scores, total_alt_scores)
 
-        pwm_dict['NLS_delta'] = ProtMatrix.regex_motif_delta(nonambi_prot_ref, nonambi_prot_alt, NLS)
-        pwm_dict['NES_delta'] = ProtMatrix.regex_motif_delta(nonambi_prot_ref, nonambi_prot_alt, NES)
+        pwm_dict['NLS_delta'] = ProtMatrix.regex_motif_delta(nonambi_prot_ref, nonambi_prot_alt, global_config['NLS'])
+        pwm_dict['NES_delta'] = ProtMatrix.regex_motif_delta(nonambi_prot_ref, nonambi_prot_alt, global_config['NES'])
 
         return pwm_dict
 
@@ -270,25 +276,18 @@ class ProtMatrix:
         all_ref_scores.extend(tyrcsk_ref_scores)
         all_alt_scores.extend(tyrcsk_alt_scores)
 
+        # get total scores and count deltas
+        ref_score_sum = sum(all_ref_scores)
+        alt_score_sum = sum(all_alt_scores)
+        phosphorylation_dict['phos_score_delta'] = alt_score_sum - ref_score_sum
 
-        phosphorylation_dict['cdkphos_count'] = cdkphos_count
-        phosphorylation_dict['cdkphos_score'] = cdkphos_score
+        ref_count_sum = sum(all_ref_idxs)
+        alt_count_sum = sum(all_alt_idxs)
+        phosphorylation_dict['phos_count_delta'] = ref_count_sum - alt_count_sum
 
-        phosphorylation_dict['camppka_count'] = camppka_count
-        phosphorylation_dict['camppka_score'] = camppka_score
-
-        phosphorylation_dict['ck2_count'] = ck2_count
-        phosphorylation_dict['ck2_score'] = ck2_score
-
-        phosphorylation_dict['tyrcsk_count'] = tyrcsk_count
-        phosphorylation_dict['tyrcsk_score'] = tyrcsk_score
-
-        phosphorylation_dict['phosphorylation_count_delta'] = cdkphos_count + camppka_count + ck2_count + tyrcsk_count
-        phosphorylation_dict['phosphorylation_score_delta'] = cdkphos_score + camppka_score + ck2_score + tyrcsk_score
-
-        # cluster scores
-        cluster_delta = ProtMatrix.cluster_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
-        phosphorylation_dict['phos_cluster_delta'] = cluster_delta
+        # only add the cluster scores -> raw scores and counts didn't serve us well last run
+        cluster_score_composite_delta = ProtMatrix.cluster_score_composite_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
+        phosphorylation_dict['phos_cluster_score_composite_delta'] = cluster_score_composite_delta
 
         return phosphorylation_dict, all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores
 
@@ -321,18 +320,18 @@ class ProtMatrix:
         all_ref_scores.extend(ngly_2_ref_scores)
         all_alt_scores.extend(ngly_2_alt_scores)
 
-        glycosylation_dict['ngly_1_count'] = ngly_1_count
-        glycosylation_dict['ngly_1_score'] = ngly_1_score
+        # get total scores and count deltas
+        ref_score_sum = sum(all_ref_scores)
+        alt_score_sum = sum(all_alt_scores)
+        glycosylation_dict['glyc_score_delta'] = alt_score_sum - ref_score_sum
 
-        glycosylation_dict['ngly_2_count'] = ngly_2_count
-        glycosylation_dict['ngly_2_score'] = ngly_2_score
-
-        glycosylation_dict['glycosylation_count_delta'] = ngly_1_count + ngly_2_count
-        glycosylation_dict['glycosylation_score_delta'] = ngly_1_score + ngly_2_score
+        ref_count_sum = sum(all_ref_idxs)
+        alt_count_sum = sum(all_alt_idxs)
+        glycosylation_dict['glyc_count_delta'] = ref_count_sum - alt_count_sum
 
         # cluster scores
-        cluster_delta = ProtMatrix.cluster_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
-        glycosylation_dict['glyc_cluster_delta'] = cluster_delta
+        cluster_score_composite_delta = ProtMatrix.cluster_score_composite_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
+        glycosylation_dict['glyc_cluster_score_composite_delta'] = cluster_score_composite_delta
 
         return glycosylation_dict, all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores
 
@@ -365,20 +364,75 @@ class ProtMatrix:
         all_ref_scores.extend(kenbox_ref_scores)
         all_alt_scores.extend(kenbox_alt_scores)
 
+        # get total scores and count deltas
+        ref_score_sum = sum(all_ref_scores)
+        alt_score_sum = sum(all_alt_scores)
+        ubiquitination_dict['ubiq_score_delta'] = alt_score_sum - ref_score_sum
 
-        ubiquitination_dict['dbox_count'] = dbox_count
-        ubiquitination_dict['dbox_score'] = dbox_score
+        ref_count_sum = sum(all_ref_idxs)
+        alt_count_sum = sum(all_alt_idxs)
+        ubiquitination_dict['ubiq_count_delta'] = ref_count_sum - alt_count_sum
 
-        ubiquitination_dict['kenbox_count'] = kenbox_count
-        ubiquitination_dict['kenbox_score'] = kenbox_score
 
-        ubiquitination_dict['ubiquitination_count_delta'] = dbox_count + kenbox_count
-        ubiquitination_dict['ubiquitination_score_delta'] = dbox_score + kenbox_score
-
-        cluster_delta = ProtMatrix.cluster_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
-        ubiquitination_dict['ubiq_cluster_delta'] = cluster_delta
+        cluster_score_composite_delta = ProtMatrix.cluster_score_composite_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
+        ubiquitination_dict['ubiq_cluster_score_composite_delta'] = cluster_score_composite_delta
 
         return ubiquitination_dict, all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores
+
+
+    # Histone Domain Profile
+    @staticmethod
+    def histone_profile(nonambi_prot_ref, nonambi_prot_alt):
+        histone_domain_dict = global_config['Histone_Domains']
+
+        H2A_regseq = histone_domain_dict['H2A']
+        H2B_regseq = histone_domain_dict['H2B']
+        H3_regseq = histone_domain_dict['H3']
+        H4_regseq = histone_domain_dict['H4']
+
+
+        histone_profile_dict = {}
+        all_ref_idxs = []
+        all_alt_idxs = []
+
+        # get all histone site profiles + clusters -> then get one big histone domain cluster stat
+        h2a_cluster_score, h2a_ref_idxs, h2a_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref,
+                                                                                       nonambi_prot_alt,
+                                                                                       H2A_regseq)
+        all_ref_idxs.extend(h2a_ref_idxs)
+        all_alt_idxs.extend(h2a_alt_idxs)
+        histone_profile_dict['h2a_cluster_score_delta'] = h2a_cluster_score
+
+        h2b_cluster_score, h2b_ref_idxs, h2b_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref,
+                                                                                       nonambi_prot_alt,
+                                                                                       H2B_regseq)
+        all_ref_idxs.extend(h2b_ref_idxs)
+        all_alt_idxs.extend(h2b_alt_idxs)
+        histone_profile_dict['h2b_cluster_score_delta'] = h2b_cluster_score
+
+        h3_cluster_score, h3_ref_idxs, h3_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref,
+                                                                                    nonambi_prot_alt,
+                                                                                    H3_regseq)
+        all_ref_idxs.extend(h3_ref_idxs)
+        all_alt_idxs.extend(h3_alt_idxs)
+        histone_profile_dict['h3_cluster_score_delta'] = h3_cluster_score
+
+        h4_cluster_score, h4_ref_idxs, h4_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref,
+                                                                                    nonambi_prot_alt,
+                                                                                    H4_regseq)
+        all_ref_idxs.extend(h4_ref_idxs)
+        all_alt_idxs.extend(h4_alt_idxs)
+        histone_profile_dict['h4_cluster_score_delta'] = h4_cluster_score
+
+        histone_profile_dict['Histone_Domain_Composite_Delta'] = (h2a_cluster_score +
+                                                                  h2b_cluster_score +
+                                                                  h3_cluster_score +
+                                                                  h4_cluster_score)
+
+        histone_profile_dict['Histone_Domain_All_Clusters'] = (ProtMatrix.regex_cluster(all_alt_idxs)
+                                                               - ProtMatrix.regex_cluster(all_ref_idxs))
+
+        return histone_profile_dict
 
 
     @staticmethod
@@ -473,9 +527,26 @@ class ProtMatrix:
 
 
     @staticmethod
+    def cluster_score_composite_delta(ref_idxs, alt_idxs, ref_scores, alt_scores):
+        """Cluster score determined by composite inverse distance scoring"""
+        return ProtMatrix.cluster_composite_scorer(alt_idxs, alt_scores) - ProtMatrix.cluster_composite_scorer(ref_idxs, ref_scores)
+
+    @staticmethod
+    def cluster_composite_scorer(idxs, scores, max_distance=30):
+        cluster_score = 0
+        for pos in range(len(idxs) - 1):  # motifs within 30 are usually considered to be a cluster (maybe change this if proven otherwise)
+            distance = idxs[pos + 1] - idxs[pos]
+            if distance <= 0:
+                continue
+            if distance <= max_distance:
+                cluster_score += (scores[pos] + scores[pos + 1]) / (distance + 1)
+
+        return cluster_score
+
+
+    @staticmethod
     def regex_motif_delta(nonambi_ref, nonambi_alt, regex_motif):
         return ProtMatrix.count_regex(nonambi_alt, regex_motif) - ProtMatrix.count_regex(nonambi_ref, regex_motif)
-
 
     @staticmethod
     def count_regex(sequence, regex_list):
@@ -485,24 +556,44 @@ class ProtMatrix:
         return sum(counts)
 
 
+    # regex sequence toolkit
     @staticmethod
-    def cluster_delta(ref_idxs, alt_idxs, ref_scores, alt_scores):
-        """Cluster score determined by composite inverse distance scoring"""
-        return ProtMatrix.cluster_finder(alt_idxs, alt_scores) - ProtMatrix.cluster_finder(ref_idxs, ref_scores)
+    def cluster_regex_delta(ref_protseq, alt_protseq, regex_sequence):
+        """
+        Regex seequence cluster score identification and index identifications
+        :param ref_protseq:
+        :param alt_protseq:
+        :param regex_sequence:
+        :return: [0] cluster_regex_score, [1] ref_idxs, [2] alt_idxs
+        """
 
+        ref_idx_list = ProtMatrix.find_regex(ref_protseq, regex_sequence)
+        alt_idx_list = ProtMatrix.find_regex(alt_protseq, regex_sequence)
+
+        cluster_regex_score = ProtMatrix.regex_cluster(alt_idx_list) - ProtMatrix.regex_cluster(ref_idx_list)
+
+        return cluster_regex_score, ref_idx_list, alt_idx_list
 
     @staticmethod
-    def cluster_finder(idxs, scores, max_distance=30):
+    def regex_cluster(idxs, max_distance=30):
         cluster_score = 0
-        for pos in range(len(idxs) - 1):  # motifs within 30 are usually considered to be a cluster (maybe change this if proven otherwise)
+
+        for pos in range(len(idxs) - 1):
             distance = idxs[pos + 1] - idxs[pos]
             if distance <= 0:
                 continue
-
             if distance <= max_distance:
-                cluster_score += (scores[pos] + scores[pos + 1]) / (distance + 1)
+                cluster_score += 1 / distance
 
         return cluster_score
 
+    @staticmethod
+    def find_regex(sequence, regex_list):
+        positions = []
+        for motif in regex_list:
+            pattern = '(?=(' + motif + '))'
+            for m in re.finditer(pattern, sequence):
+                positions.append(m.start())
 
-
+        positions = sorted(set(positions))
+        return positions

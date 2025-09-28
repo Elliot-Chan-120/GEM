@@ -6,12 +6,15 @@ model_name = "ReGEN_v3"
 
 # all functions with a name guard need to be called alone
 
+# [1] sourced data extraction and processing
 def keystone_dataframe_processing(ml_modelname=model_name):
     test = KeyStone(ml_modelname)
     test.naive_dataframe()
     test.decompress_genome()
     test.context_dataframe()
 
+
+# [2] feature extraction / engineering
 def keystone_extract_proteins(model = model_name):
     test = KeyStone(model)
     try:
@@ -70,7 +73,8 @@ def ks_aapwm_profile(model = model_name):
         print(f"PWM Fingerprint Generation Failed: {e}")
         raise
 
-def keystone_merge_datasects(ml_modelname=model_name):
+# [3] Feature dataframe merging
+def keystone_merge(ml_modelname=model_name):
     # [Generating DNA mutation fingerprints]: 100%|██████████| 378862/378862 [13:19<00:00, 473.69it/s]
     # [Generating AA chain mutation fingerprints]: 100%|██████████| 378862/378862 [1:30:27<00:00, 69.81it/s]
     test = KeyStone(ml_modelname)
@@ -84,6 +88,7 @@ def keystone_merge_datasects(ml_modelname=model_name):
         print(f"Mutation Fingerprint Generation Failed: {e}")
         raise
 
+# [4] Model training and optimization
 def keystone_model_training(ml_modelname=model_name):
     # this process generally takes 2+ hours depending on background tasks
     test = KeyStone(ml_modelname)
@@ -98,5 +103,6 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
     if __name__ == "__main__":
         module = ReGen(pathogenic_gene_file, ml_model, outfile_name)
         module.repair()
+
 
 keystone_model_training()

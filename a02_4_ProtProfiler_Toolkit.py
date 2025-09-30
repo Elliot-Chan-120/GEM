@@ -153,7 +153,7 @@ class ProtMatrix:
             # pool.imap method applies function self.PWM_profile_wrapper to each row in fingerprint_rows
             ProtMatrix._pool.imap(ProtMatrix.PWM_profile_wrapper, fingerprint_rows),
             total=len(fingerprint_rows),
-            desc="[Generating AA profile fingerprints -- Cluster distance-weighted composite scoring]"
+            desc="[Generating AA profile fingerprints -- Regex & Position Weight Matrix Signals + Cluster Composite Scoring]"
         ))
 
         fingerprint_df = pd.DataFrame(fingerprint_rows)

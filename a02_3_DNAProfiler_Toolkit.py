@@ -127,7 +127,7 @@ class DNAMatrix:
             # pool.imap method applies function self.PWM_profile_wrapper to each row in fingerprint_rows
             DNAMatrix._pool.imap(DNAMatrix.PWM_profile_wrapper, fingerprint_rows),
             total=len(fingerprint_rows),
-            desc="[Generating DNA motif fingerprints -- Gaussian-weighted composite scoring]"
+            desc="[Generating DNA motif fingerprints -- Position Weight Matrix Signals * Gaussian-weighted composite scoring + Cluster Composite Scoring]"
         ))
 
         fingerprint_df = pd.DataFrame(fingerprint_rows)

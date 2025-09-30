@@ -49,7 +49,7 @@ def ks_prot_profile(model = model_name):
         print(f"Protein Fingerprint Generation Failed: {e}")
         raise
 
-def ks_dnapwm_profile(model = model_name):
+def ks_dnamotif_profile(model = model_name):
     # 40 minutes
     test = KeyStone(model)
     try:
@@ -61,7 +61,7 @@ def ks_dnapwm_profile(model = model_name):
         print(f"PWM Fingerprint Generation Failed: {e}")
         raise
 
-def ks_aapwm_profile(model = model_name):
+def ks_aamotif_profile(model = model_name):
     # 12 minutes
     test = KeyStone(model)
     try:
@@ -104,5 +104,5 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
         module = ReGen(pathogenic_gene_file, ml_model, outfile_name)
         module.repair()
 
-
-ks_aapwm_profile()
+# [ Command ]
+keystone_model_training()

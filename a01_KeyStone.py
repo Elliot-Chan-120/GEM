@@ -363,17 +363,17 @@ class KeyStone:
         # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=175)
         # best_params = study.best_params
 
-        best_params = {'n_estimators': 1692,
+        best_params = {'n_estimators': 1137,
                        'max_depth': 10,
-                       'learning_rate': 0.029625184360382837,
-                       'subsample': 0.8368865392296614,
-                       'colsample_bytree': 0.9535892593209028,
-                       'colsample_bylevel': 0.8600713855914001,
-                       'reg_alpha': 0.08665015860965015,
-                       'reg_lambda': 3.5581774984777685,
-                       'gamma': 2.5540583926468226,
-                       'min_child_weight': 5,
-                       'scale_pos_weight': 3.8285163516486533}
+                       'learning_rate': 0.03718094406578397,
+                       'subsample': 0.9805952819119571,
+                       'colsample_bytree': 0.9526753209780319,
+                       'colsample_bylevel': 0.5978955673946482,
+                       'reg_alpha': 0.3468065043758273,
+                       'reg_lambda': 1.9070020123968399,
+                       'gamma': 0.09110912825774864,
+                       'min_child_weight': 2,
+                       'scale_pos_weight': 4.135699653637112}
 
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)

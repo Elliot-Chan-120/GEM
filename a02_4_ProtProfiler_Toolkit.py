@@ -14,11 +14,11 @@ from tqdm import tqdm
 import multiprocessing
 from multiprocessing import Pool
 
-from b00_bio_library import AMBIGUOUS, IUPAC_CODES, NLS, NES, HISTONE_DOMAINS
+from b00_bio_library import AMBIGUOUS, IUPAC_CODES, NLS, NES
 
-# current error
-# - need function to find list of all overlapping indexes for all regex motifs
-# - this is so the regex-specific clustering motifs can actually do what they need to
+# to-do
+# figure out how to make the cluster-scoring algorithm work for total profiles instead of individual profiles
+# - maybe make AA pwm return list of filtered indexes?
 
 global_config = {}
 
@@ -59,13 +59,16 @@ class ProtMatrix:
         dbox_pwm = np.loadtxt(aa_motif_path / 'dbox_pwm.txt') # - Ubiquitination
         kenbox_pwm = np.loadtxt(aa_motif_path / 'kenbox_pwm.txt')
 
+        # sh2 family
+        sh2_grb2like_pwm = np.loadtxt(aa_motif_path / 'sh2_grb2like.txt')
+        sh2_sfk2_pwm = np.loadtxt(aa_motif_path / 'sh2_sfk2.txt')
+        sh2_stat3_pwm = np.loadtxt(aa_motif_path / 'sh2_stat3.txt')
+        sh2_stat5_pwm = np.loadtxt(aa_motif_path / 'sh2_stat5.txt')
+        sh2_stat6_regseq =  ['GYKAF']
 
-
-        # create config for downstream multiproc - these get added to global_config -> e.g. pwm = global_config['pwm_name_here']
+        # create config for downstream multiproc
+        # these get added to global_config -> e.g. pwm = global_config['pwm_name_here']
         self.config = {
-            # Histone domain profile
-            'Histone_Domains': HISTONE_DOMAINS,
-
 
             # Post-translational modification motifs
             # - Phosphorylation motifs
@@ -85,6 +88,13 @@ class ProtMatrix:
             # Nuclear export and import signals
             'NES': NES,
             'NLS': NLS,
+
+            # SH2 MOTIF FAMILY - fourth round of motif revisions: after this maybe turn to other properties to investigate
+            'sh2_grb2like': sh2_grb2like_pwm,
+            'sh2_sfk2': sh2_sfk2_pwm,
+            'sh2_stat3': sh2_stat3_pwm,
+            'sh2_stat5': sh2_stat5_pwm,
+            'sh2_stat6_regseq': sh2_stat6_regseq,
         }
 
         # define number of cores
@@ -166,27 +176,29 @@ class ProtMatrix:
         """
         ref_protein, alt_protein = fp_row
 
+        aa_alphabet = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, 'I': 7,
+                       'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, 'R': 14,
+                       'S': 15, 'T': 16, 'V': 17, 'W': 18, 'Y': 19}
+
         fp = {}
-        fp.update(ProtMatrix.PTM_profile(ref_protein, alt_protein))
-        fp.update(ProtMatrix.histone_profile(ref_protein, alt_protein))
+        fp.update(ProtMatrix.PTM_profile(ref_protein, alt_protein, aa_alphabet))
+        fp.update(ProtMatrix.nuclear_signal_profile(ref_protein, alt_protein))
+        fp.update(ProtMatrix.SH2_profile(ref_protein, alt_protein, aa_alphabet))
 
         return fp
 
 
     @staticmethod
-    def PTM_profile(nonambi_prot_ref, nonambi_prot_alt):
+    def PTM_profile(nonambi_prot_ref, nonambi_prot_alt, aa_alphabet):
         """
         :param nonambi_prot_ref:
         :param nonambi_prot_alt:
+        :param aa_alphabet:
         :return:
         """
         # ====[PWM MOTIF DISRUPTIONS]====
         # Combines gaussian scoring and pwm navigation to create a motif disruption score for each specific motif
         # For now, let's see how impactful each motif search is going to be for XGBoost
-        aa_alphabet = {'A': 0, 'C': 1, 'D': 2, 'E': 3, 'F': 4, 'G': 5, 'H': 6, 'I': 7,
-                       'K': 8, 'L': 9, 'M': 10, 'N': 11, 'P': 12, 'Q': 13, 'R': 14,
-                       'S': 15, 'T': 16, 'V': 17, 'W': 18, 'Y': 19}
-
         pwm_dict = {}
 
         total_ref_idxs = []
@@ -215,16 +227,14 @@ class ProtMatrix:
         total_ref_scores.extend(ubiq_ref_scores)
         total_alt_scores.extend(ubiq_alt_scores)
 
-        # --- Finalize DataFrame: bulk update + finishing details ---
+        # --- Finalize DataFrame: bulk update + fiNLShing details ---
         pwm_dict.update(phos_dict)
         pwm_dict.update(glyc_dict)
         pwm_dict.update(ubiq_dict)
 
         # identification of overall cluster disruption
-        pwm_dict['Total_PTM_cluster_composite_delta'] = ProtMatrix.cluster_score_composite_delta(total_ref_idxs, total_alt_idxs, total_ref_scores, total_alt_scores)
-
-        pwm_dict['NLS_delta'] = ProtMatrix.regex_motif_delta(nonambi_prot_ref, nonambi_prot_alt, global_config['NLS'])
-        pwm_dict['NES_delta'] = ProtMatrix.regex_motif_delta(nonambi_prot_ref, nonambi_prot_alt, global_config['NES'])
+        pwm_dict['Total_PTM_cluster_composite_delta'] = (ProtMatrix.cluster_composite_scorer(total_alt_idxs, total_alt_scores) -
+                                                         ProtMatrix.cluster_composite_scorer(total_ref_idxs, total_ref_scores))
 
         return pwm_dict
 
@@ -239,7 +249,8 @@ class ProtMatrix:
         all_alt_scores = []
 
         # === PHOSPHORYLATION ===
-        cdkphos_count, cdkphos_score, cdkphos_ref_idxs, cdkphos_alt_idxs, cdkphos_ref_scores, cdkphos_alt_scores = (
+        (cdkphos_count, cdkphos_score, cdk_cluster,
+         cdkphos_ref_idxs, cdkphos_alt_idxs, cdkphos_ref_scores, cdkphos_alt_scores) = (
             ProtMatrix.AA_pwm_stats(global_config['cdkphos_pwm'],
                                     nonambi_prot_ref, nonambi_prot_alt,
                                     aa_alphabet, 0.7))
@@ -249,7 +260,8 @@ class ProtMatrix:
         all_alt_scores.extend(cdkphos_alt_scores)
 
 
-        camppka_count, camppka_score, camppka_ref_idxs, camppka_alt_idxs, camppka_ref_scores, camppka_alt_scores = (
+        (camppka_count, camppka_score, camppka_cluster,
+         camppka_ref_idxs, camppka_alt_idxs, camppka_ref_scores, camppka_alt_scores) = (
             ProtMatrix.AA_pwm_stats(global_config['camppka_pwm'],
                                     nonambi_prot_ref, nonambi_prot_alt,
                                     aa_alphabet, 0.7))
@@ -258,7 +270,8 @@ class ProtMatrix:
         all_ref_scores.extend(camppka_ref_scores)
         all_alt_scores.extend(camppka_alt_scores)
 
-        ck2_count, ck2_score, ck2_ref_idxs, ck2_alt_idxs, ck2_ref_scores, ck2_alt_scores = (
+        (ck2_count, ck2_score, ck2_cluster,
+         ck2_ref_idxs, ck2_alt_idxs, ck2_ref_scores, ck2_alt_scores) = (
             ProtMatrix.AA_pwm_stats(global_config['ck2_pwm'],
                                     nonambi_prot_ref, nonambi_prot_alt,
                                     aa_alphabet, 0.7))
@@ -267,7 +280,8 @@ class ProtMatrix:
         all_ref_scores.extend(ck2_ref_scores)
         all_alt_scores.extend(ck2_alt_scores)
 
-        tyrcsk_count, tyrcsk_score, tyrcsk_ref_idxs, tyrcsk_alt_idxs, tyrcsk_ref_scores, tyrcsk_alt_scores= (
+        (tyrcsk_count, tyrcsk_score, tyrcsk_cluster,
+         tyrcsk_ref_idxs, tyrcsk_alt_idxs, tyrcsk_ref_scores, tyrcsk_alt_scores)= (
             ProtMatrix.AA_pwm_stats(global_config['tyrcsk_pwm'],
                                     nonambi_prot_ref, nonambi_prot_alt,
                                     aa_alphabet, 0.7))
@@ -277,17 +291,17 @@ class ProtMatrix:
         all_alt_scores.extend(tyrcsk_alt_scores)
 
         # get total scores and count deltas
-        ref_score_sum = sum(all_ref_scores)
-        alt_score_sum = sum(all_alt_scores)
-        phosphorylation_dict['phos_score_delta'] = alt_score_sum - ref_score_sum
-
-        ref_count_sum = sum(all_ref_idxs)
-        alt_count_sum = sum(all_alt_idxs)
-        phosphorylation_dict['phos_count_delta'] = ref_count_sum - alt_count_sum
+        phosphorylation_dict['phos_score_delta'] = cdkphos_score + camppka_score + ck2_score + tyrcsk_score
+        phosphorylation_dict['phos_count_delta'] = cdkphos_count + camppka_count + ck2_count + tyrcsk_count
 
         # only add the cluster scores -> raw scores and counts didn't serve us well last run
-        cluster_score_composite_delta = ProtMatrix.cluster_score_composite_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
-        phosphorylation_dict['phos_cluster_score_composite_delta'] = cluster_score_composite_delta
+        cluster_composite_delta = cdk_cluster + camppka_cluster + ck2_cluster + tyrcsk_cluster
+        phosphorylation_dict['phos_clusters_composite_delta'] = cluster_composite_delta
+
+        cluster_score_domain_delta = (ProtMatrix.cluster_composite_scorer(all_alt_idxs, all_alt_scores) -
+                                      ProtMatrix.cluster_composite_scorer(all_ref_idxs, all_ref_scores))
+
+        phosphorylation_dict['phos_domain_cluster_delta'] = cluster_score_domain_delta
 
         return phosphorylation_dict, all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores
 
@@ -301,7 +315,8 @@ class ProtMatrix:
         all_alt_scores = []
 
         # === GLYCOSYLATION ===
-        ngly_1_count, ngly_1_score, ngly_1_ref_idxs, ngly_1_alt_idxs, ngly_1_ref_scores, ngly_1_alt_scores = (
+        (ngly_1_count, ngly_1_score, ngly_1_cluster,
+         ngly_1_ref_idxs, ngly_1_alt_idxs, ngly_1_ref_scores, ngly_1_alt_scores) = (
             ProtMatrix.AA_pwm_stats(global_config['ngly_1_pwm'],
                                     nonambi_prot_ref, nonambi_prot_alt,
                                     aa_alphabet, 0.7))
@@ -311,7 +326,8 @@ class ProtMatrix:
         all_alt_scores.extend(ngly_1_alt_scores)
 
 
-        ngly_2_count, ngly_2_score, ngly_2_ref_idxs, ngly_2_alt_idxs, ngly_2_ref_scores, ngly_2_alt_scores = (
+        (ngly_2_count, ngly_2_score, ngly_2_cluster,
+         ngly_2_ref_idxs, ngly_2_alt_idxs, ngly_2_ref_scores, ngly_2_alt_scores) = (
             ProtMatrix.AA_pwm_stats(global_config['ngly_2_pwm'],
                                     nonambi_prot_ref, nonambi_prot_alt,
                                     aa_alphabet, 0.7))
@@ -321,17 +337,17 @@ class ProtMatrix:
         all_alt_scores.extend(ngly_2_alt_scores)
 
         # get total scores and count deltas
-        ref_score_sum = sum(all_ref_scores)
-        alt_score_sum = sum(all_alt_scores)
-        glycosylation_dict['glyc_score_delta'] = alt_score_sum - ref_score_sum
-
-        ref_count_sum = sum(all_ref_idxs)
-        alt_count_sum = sum(all_alt_idxs)
-        glycosylation_dict['glyc_count_delta'] = ref_count_sum - alt_count_sum
+        glycosylation_dict['glyc_score_delta'] = ngly_1_score + ngly_2_score
+        glycosylation_dict['glyc_count_delta'] = ngly_1_count + ngly_2_count
 
         # cluster scores
-        cluster_score_composite_delta = ProtMatrix.cluster_score_composite_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
-        glycosylation_dict['glyc_cluster_score_composite_delta'] = cluster_score_composite_delta
+        cluster_composite_delta = ngly_1_cluster + ngly_2_cluster
+        glycosylation_dict['glyc_clusters_composite_delta'] = cluster_composite_delta
+
+        cluster_score_domain_delta = (ProtMatrix.cluster_composite_scorer(all_alt_idxs, all_alt_scores) -
+                ProtMatrix.cluster_composite_scorer(all_ref_idxs, all_ref_scores))
+
+        glycosylation_dict['glyc_domain_cluster_delta'] = cluster_score_domain_delta
 
         return glycosylation_dict, all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores
 
@@ -345,7 +361,8 @@ class ProtMatrix:
         all_alt_scores = []
 
         # === UBIQUITINATION ===
-        dbox_count, dbox_score, dbox_ref_idxs, dbox_alt_idxs, dbox_ref_scores, dbox_alt_scores = (
+        (dbox_count, dbox_score, dbox_cluster,
+         dbox_ref_idxs, dbox_alt_idxs, dbox_ref_scores, dbox_alt_scores) = (
             ProtMatrix.AA_pwm_stats(global_config['dbox_pwm'],
                                     nonambi_prot_ref, nonambi_prot_alt,
                                     aa_alphabet, 0.7))
@@ -355,7 +372,8 @@ class ProtMatrix:
         all_alt_scores.extend(dbox_alt_scores)
 
 
-        kenbox_count, kenbox_score, kenbox_ref_idxs, kenbox_alt_idxs, kenbox_ref_scores, kenbox_alt_scores = (
+        (kenbox_count, kenbox_score, kenbox_cluster,
+         kenbox_ref_idxs, kenbox_alt_idxs, kenbox_ref_scores, kenbox_alt_scores) = (
             ProtMatrix.AA_pwm_stats(global_config['kenbox_pwm'],
                                     nonambi_prot_ref, nonambi_prot_alt,
                                     aa_alphabet, 0.7))
@@ -365,118 +383,159 @@ class ProtMatrix:
         all_alt_scores.extend(kenbox_alt_scores)
 
         # get total scores and count deltas
-        ref_score_sum = sum(all_ref_scores)
-        alt_score_sum = sum(all_alt_scores)
-        ubiquitination_dict['ubiq_score_delta'] = alt_score_sum - ref_score_sum
+        ubiquitination_dict['ubiq_score_delta'] = dbox_score + kenbox_score
+        ubiquitination_dict['ubiq_count_delta'] = dbox_count + kenbox_count
 
-        ref_count_sum = sum(all_ref_idxs)
-        alt_count_sum = sum(all_alt_idxs)
-        ubiquitination_dict['ubiq_count_delta'] = ref_count_sum - alt_count_sum
+        ubiquitination_dict['ubiq_clusters_composite_delta'] = dbox_cluster + kenbox_cluster
 
+        cluster_score_domain_delta = (ProtMatrix.cluster_composite_scorer(all_alt_idxs, all_alt_scores) -
+                ProtMatrix.cluster_composite_scorer(all_ref_idxs, all_ref_scores))
 
-        cluster_score_composite_delta = ProtMatrix.cluster_score_composite_delta(all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores)
-        ubiquitination_dict['ubiq_cluster_score_composite_delta'] = cluster_score_composite_delta
+        ubiquitination_dict['ubiq_domain_cluster_delta'] = cluster_score_domain_delta
 
         return ubiquitination_dict, all_ref_idxs, all_alt_idxs, all_ref_scores, all_alt_scores
 
 
-    # Histone Domain Profile
     @staticmethod
-    def histone_profile(nonambi_prot_ref, nonambi_prot_alt):
-        histone_domain_dict = global_config['Histone_Domains']
-
-        H2A_regseq = histone_domain_dict['H2A']
-        H2B_regseq = histone_domain_dict['H2B']
-        H3_regseq = histone_domain_dict['H3']
-        H4_regseq = histone_domain_dict['H4']
+    def stability_profile(nonambi_prot_ref, nonambi_prot_alt):
+        pass
 
 
-        histone_profile_dict = {}
+    @staticmethod
+    def nuclear_signal_profile(nonambi_prot_ref, nonambi_prot_alt):
+        nuclear_dict = {}
         all_ref_idxs = []
         all_alt_idxs = []
 
-        # get all histone site profiles + clusters -> then get one big histone domain cluster stat
-        h2a_cluster_score, h2a_ref_idxs, h2a_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref,
-                                                                                       nonambi_prot_alt,
-                                                                                       H2A_regseq)
-        all_ref_idxs.extend(h2a_ref_idxs)
-        all_alt_idxs.extend(h2a_alt_idxs)
-        histone_profile_dict['h2a_cluster_score_delta'] = h2a_cluster_score
+        NLS_cluster, NLS_ref_idxs, NLS_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref, nonambi_prot_alt, global_config['NLS'])
+        all_ref_idxs.extend(NLS_ref_idxs)
+        all_alt_idxs.extend(NLS_alt_idxs)
 
-        h2b_cluster_score, h2b_ref_idxs, h2b_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref,
-                                                                                       nonambi_prot_alt,
-                                                                                       H2B_regseq)
-        all_ref_idxs.extend(h2b_ref_idxs)
-        all_alt_idxs.extend(h2b_alt_idxs)
-        histone_profile_dict['h2b_cluster_score_delta'] = h2b_cluster_score
 
-        h3_cluster_score, h3_ref_idxs, h3_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref,
-                                                                                    nonambi_prot_alt,
-                                                                                    H3_regseq)
-        all_ref_idxs.extend(h3_ref_idxs)
-        all_alt_idxs.extend(h3_alt_idxs)
-        histone_profile_dict['h3_cluster_score_delta'] = h3_cluster_score
+        NES_cluster, NES_ref_idxs, NES_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref, nonambi_prot_alt, global_config['NES'])
+        all_ref_idxs.extend(NES_ref_idxs)
+        all_alt_idxs.extend(NES_alt_idxs)
 
-        h4_cluster_score, h4_ref_idxs, h4_alt_idxs = ProtMatrix.cluster_regex_delta(nonambi_prot_ref,
-                                                                                    nonambi_prot_alt,
-                                                                                    H4_regseq)
-        all_ref_idxs.extend(h4_ref_idxs)
-        all_alt_idxs.extend(h4_alt_idxs)
-        histone_profile_dict['h4_cluster_score_delta'] = h4_cluster_score
 
-        histone_profile_dict['Histone_Domain_Composite_Delta'] = (h2a_cluster_score +
-                                                                  h2b_cluster_score +
-                                                                  h3_cluster_score +
-                                                                  h4_cluster_score)
+        nuclear_dict['NLS_count_delta'] = len(NLS_alt_idxs) - len(NLS_ref_idxs)
+        nuclear_dict['NES_count_delta'] = len(NES_alt_idxs) - len(NES_ref_idxs)
+        nuclear_dict['Nuclear_Signal_delta'] = nuclear_dict['NLS_count_delta'] + nuclear_dict['NES_count_delta']
+        nuclear_dict['NLS_cluster_delta'] = NLS_cluster
+        nuclear_dict['NES_cluster_delta'] = NES_cluster
+        nuclear_dict['Total_Nuclear_Cluster_delta'] = ProtMatrix.regex_cluster(all_alt_idxs) - ProtMatrix.regex_cluster(all_ref_idxs)
 
-        histone_profile_dict['Histone_Domain_All_Clusters'] = (ProtMatrix.regex_cluster(all_alt_idxs)
-                                                               - ProtMatrix.regex_cluster(all_ref_idxs))
-
-        return histone_profile_dict
-
+        return nuclear_dict
+    # contributed something - not useless
 
     @staticmethod
-    def AA_pwm_stats(pwm, prot_ref, prot_alt, alphabet, threshold):
+    def SH2_profile(nonambi_prot_ref, nonambi_prot_alt, aa_alphabet):
+        sh2_dict = {}
+        all_ref_idxs = []
+        all_alt_idxs = []
+        all_ref_scores = []
+        all_alt_scores = []
+
+        (grub2_count, grub2_score, grub2_cluster,
+         grub2_ref_idxs, grub2_alt_idxs, grub2_ref_scores, grub2_alt_scores) = (
+            ProtMatrix.AA_pwm_stats(global_config['sh2_grb2like'], nonambi_prot_ref, nonambi_prot_alt, aa_alphabet, 0.7))
+        all_ref_idxs.extend(grub2_ref_idxs)
+        all_alt_idxs.extend(grub2_alt_idxs)
+        all_ref_scores.extend(grub2_ref_scores)
+        all_alt_scores.extend(grub2_alt_scores)
+
+        (sfk2_count, sfk2_score, sfk2_cluster,
+         sfk2_ref_idxs, sfk2_alt_idxs, sfk2_ref_scores, sfk2_alt_scores) = (
+            ProtMatrix.AA_pwm_stats(global_config['sh2_sfk2'], nonambi_prot_ref, nonambi_prot_alt, aa_alphabet,
+                                    0.7))
+        all_ref_idxs.extend(sfk2_ref_idxs)
+        all_alt_idxs.extend(sfk2_alt_idxs)
+        all_ref_scores.extend(sfk2_ref_scores)
+        all_alt_scores.extend(sfk2_alt_scores)
+
+        (stat3_count, stat3_score, stat3_cluster,
+         stat3_ref_idxs, stat3_alt_idxs, stat3_ref_scores, stat3_alt_scores) = (
+            ProtMatrix.AA_pwm_stats(global_config['sh2_stat3'], nonambi_prot_ref, nonambi_prot_alt, aa_alphabet,
+                                    0.7))
+        all_ref_idxs.extend(stat3_ref_idxs)
+        all_alt_idxs.extend(stat3_alt_idxs)
+        all_ref_scores.extend(stat3_ref_scores)
+        all_alt_scores.extend(stat3_alt_scores)
+
+        (stat5_count, stat5_score, stat5_cluster,
+         stat5_ref_idxs, stat5_alt_idxs, stat5_ref_scores, stat5_alt_scores) = (
+            ProtMatrix.AA_pwm_stats(global_config['sh2_stat5'], nonambi_prot_ref, nonambi_prot_alt, aa_alphabet,
+                                    0.7))
+        all_ref_idxs.extend(stat5_ref_idxs)
+        all_alt_idxs.extend(stat5_alt_idxs)
+        all_ref_scores.extend(stat5_ref_scores)
+        all_alt_scores.extend(stat5_alt_scores)
+
+        stat6_cluster_score, stat6_ref_idxs, stat6_alt_idxs = (
+            ProtMatrix.cluster_regex_delta(nonambi_prot_ref, nonambi_prot_alt, global_config['sh2_stat6_regseq']))
+        stat6_count = len(stat6_alt_idxs) - len(stat6_ref_idxs)
+        all_ref_idxs.extend(stat6_ref_idxs)
+        all_alt_idxs.extend(stat6_alt_idxs)
+
+        sh2_dict['SH2_count_delta'] = grub2_count + sfk2_count + stat3_count + stat5_count + stat6_count
+        sh2_dict['SH2_score_delta'] = grub2_score + sfk2_score + stat3_score + stat5_score + stat6_cluster_score
+
+        # addition of every individual cluster score shift
+        sh2_dict['SH2_clusters_delta'] = grub2_cluster + sfk2_cluster + stat3_cluster + stat5_cluster + stat6_cluster_score
+
+        cluster_score_domain_delta = (ProtMatrix.cluster_composite_scorer(all_alt_idxs, all_alt_scores) -
+                                      ProtMatrix.cluster_composite_scorer(all_ref_idxs, all_ref_scores))
+        sh2_dict['SH2_domain_cluster_score'] = cluster_score_domain_delta
+
+        return sh2_dict
+
+    @staticmethod
+    def AA_pwm_stats(pwm, prot_ref, prot_alt, alphabet, cluster_threshold):
         """
         handles motif finding for amino acid sequences - no position weight scoring since we are taking the most likely protein to be produced with no coordinates
         :param pwm:
         :param prot_ref:
         :param prot_alt:
         :param alphabet:
-        :param threshold:
-        :return: motif_quantity_delta, motif_score_delta, ref_motif_idxs, alt_motif_idxs, ref_motif_scores, alt_motif_scores
+        :param cluster_threshold:
+        :return: motif_quantity_delta, motif_score_delta, cluster_score,
+        ref_motif_idxs, alt_motif_idxs, ref_motif_scores, alt_motif_scores
         """
         motif_size = pwm.shape[0]
 
-        ref_motif_idxs, ref_motif_scores = ProtMatrix.probability_all_pos(prot_ref, motif_size, pwm, alphabet, threshold)
-        alt_motif_idxs, alt_motif_scores = ProtMatrix.probability_all_pos(prot_alt, motif_size, pwm, alphabet, threshold)
+        ref_motif_idxs, ref_motif_scores = ProtMatrix.probability_all_pos(prot_ref, motif_size, pwm, alphabet)
+        alt_motif_idxs, alt_motif_scores = ProtMatrix.probability_all_pos(prot_alt, motif_size, pwm, alphabet)
 
         motif_quantity_delta = len(alt_motif_idxs) - len(ref_motif_idxs)
         motif_score_delta = sum(alt_motif_scores) - sum(ref_motif_scores)
 
+        # cluster_scores = target indices
+        calc_threshold = ProtMatrix.get_threshold(pwm, cluster_threshold)
+        (cluster_score,
+         filtref_idxs, filtref_scores,
+         filtalt_idxs, filtalt_scores) = ProtMatrix.AA_cluster_score_composite_delta(ref_motif_idxs, alt_motif_idxs,
+                                                                 ref_motif_scores, alt_motif_scores,
+                                                                 calc_threshold)
 
-        return motif_quantity_delta, motif_score_delta, ref_motif_idxs, alt_motif_idxs, ref_motif_scores, alt_motif_scores
+
+        return (motif_quantity_delta, motif_score_delta, cluster_score,
+                filtref_idxs, filtalt_idxs, filtref_scores, filtalt_scores)
 
     @staticmethod
-    def probability_all_pos(sequence, motif_size, pwm, alphabet, threshold):
+    def probability_all_pos(sequence, motif_size, pwm, alphabet):
         """
         Performs sliding window and returns list of indices that are likely to contain the motif
         :param full sequence:
         :param motif_size:
         :param pwm:
         :param alphabet:
-        :param threshold:
         :return: list of each probable motif location
         """
-        motif_threshold = ProtMatrix.get_threshold(pwm, threshold)
 
         seq_len = len(sequence)
         idxs, scores = [], []
         for i in range(seq_len - motif_size + 1):  # proper search space handled
-            score = ProtMatrix.probability_subseq(sequence[i:i + motif_size], pwm, alphabet)
-            if score > motif_threshold:
-                idxs.append(i)  # contains the index the motif was found
-                scores.append(score)  # contains the score that index contained
+            idxs.append(i)  # contains the index the motif was found
+            scores.append(ProtMatrix.probability_subseq(sequence[i:i + motif_size], pwm, alphabet))  # contains the score that index contained
         return idxs, scores
 
 
@@ -527,9 +586,35 @@ class ProtMatrix:
 
 
     @staticmethod
-    def cluster_score_composite_delta(ref_idxs, alt_idxs, ref_scores, alt_scores):
-        """Cluster score determined by composite inverse distance scoring"""
-        return ProtMatrix.cluster_composite_scorer(alt_idxs, alt_scores) - ProtMatrix.cluster_composite_scorer(ref_idxs, ref_scores)
+    def AA_cluster_score_composite_delta(ref_idxs, alt_idxs, ref_scores, alt_scores, calc_threshold):
+        """
+        Cluster score determined by composite inverse distance scoring
+        :param ref_idxs:
+        :param alt_idxs:
+        :param ref_scores:
+        :param alt_scores:
+        :param calc_threshold:
+        """
+        filtref_idxs, filtref_scores = ProtMatrix.index_filter(ref_idxs, ref_scores, calc_threshold)
+        filtalt_idxs, filtalt_scores = ProtMatrix.index_filter(alt_idxs, alt_scores, calc_threshold)
+
+        return ((ProtMatrix.cluster_composite_scorer(filtalt_idxs, filtalt_scores) -
+                ProtMatrix.cluster_composite_scorer(filtref_idxs, filtref_scores)),
+                filtref_idxs, filtref_scores,
+                filtalt_idxs, filtalt_scores)
+
+
+    @staticmethod
+    def index_filter(idxs, scores, threshold):
+        filtered_idxs = []
+        filtered_scores = []
+
+        for pair in range(len(idxs)):
+            if scores[pair] >= threshold:
+                filtered_idxs.append(idxs[pair])
+                filtered_scores.append(scores[pair])
+
+        return filtered_idxs, filtered_scores
 
     @staticmethod
     def cluster_composite_scorer(idxs, scores, max_distance=30):
@@ -544,6 +629,7 @@ class ProtMatrix:
         return cluster_score
 
 
+    # regex sequence toolkit
     @staticmethod
     def regex_motif_delta(nonambi_ref, nonambi_alt, regex_motif):
         return ProtMatrix.count_regex(nonambi_alt, regex_motif) - ProtMatrix.count_regex(nonambi_ref, regex_motif)
@@ -555,8 +641,6 @@ class ProtMatrix:
             counts.append(len(re.findall(motif, sequence)))
         return sum(counts)
 
-
-    # regex sequence toolkit
     @staticmethod
     def cluster_regex_delta(ref_protseq, alt_protseq, regex_sequence):
         """
@@ -574,6 +658,7 @@ class ProtMatrix:
 
         return cluster_regex_score, ref_idx_list, alt_idx_list
 
+
     @staticmethod
     def regex_cluster(idxs, max_distance=30):
         cluster_score = 0
@@ -583,7 +668,7 @@ class ProtMatrix:
             if distance <= 0:
                 continue
             if distance <= max_distance:
-                cluster_score += 1 / distance
+                cluster_score += 1
 
         return cluster_score
 

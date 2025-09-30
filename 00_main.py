@@ -105,4 +105,4 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
         module.repair()
 
 
-keystone_model_training()
+ks_aapwm_profile()

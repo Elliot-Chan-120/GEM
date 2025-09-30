@@ -181,62 +181,76 @@ class DNAMatrix:
 
         # [2] get counts and scores of each motif listed
         # splice sites + branch points
-        sp3_count, sp3_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
-                                                               global_config['splice_3_pwm'],
-                                                               ref_section, alt_section, dna_alphabet)
+        sp3_count, sp3_score, sp3_cluster = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+                                                                    global_config['splice_3_pwm'],
+                                                                    ref_section, alt_section, dna_alphabet,
+                                                                    cluster_threshold = 0.9)
 
-        sp5_count, sp5_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
-                                                               global_config['splice_5_pwm'],
-                                                               ref_section, alt_section, dna_alphabet)
+        sp5_count, sp5_score, sp5_cluster = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+                                                       global_config['splice_5_pwm'],
+                                                       ref_section, alt_section, dna_alphabet,
+                                                       cluster_threshold = 0.9)
 
-        branch_pt_count, branch_pt_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
-                                                                           global_config['branch_pt_pwm'],
-                                                                           ref_section, alt_section, dna_alphabet)
+        branch_pt_count, branch_pt_score, branch_pt_cluster = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+                                                                                      global_config['branch_pt_pwm'],
+                                                                                      ref_section, alt_section, dna_alphabet,
+                                                                                      cluster_threshold = 0.9)
 
         # transcription factors
-        caat_count, caat_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
-                                                                 global_config['caat_pwm'],
-                                                                 ref_section, alt_section, dna_alphabet)
+        caat_count, caat_score, caat_cluster = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+                                                                       global_config['caat_pwm'],
+                                                                       ref_section, alt_section, dna_alphabet,
+                                                                       cluster_threshold = 0.9)
 
-        ctcf_count, ctcf_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
-                                                                 global_config['ctcf_pwm'],
-                                                                 ref_section, alt_section, dna_alphabet)
+        ctcf_count, ctcf_score, ctcf_cluster = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+                                                                       global_config['ctcf_pwm'],
+                                                                       ref_section, alt_section, dna_alphabet,
+                                                                       cluster_threshold = 0.9)
 
-        tata_count, tata_score = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
-                                                                 global_config['tata_pwm'],
-                                                                 ref_section, alt_section, dna_alphabet)
+        tata_count, tata_score, tata_cluster = DNAMatrix.DNA_pwm_stats(ref_vcf, alt_vcf, flank_length,
+                                                                       global_config['tata_pwm'],
+                                                                       ref_section, alt_section, dna_alphabet,
+                                                                       cluster_threshold = 0.9)
 
         total_motif_count = sp3_count + sp5_count + branch_pt_count + caat_count + ctcf_count + tata_count
         total_score_shift = sp3_score + sp5_score + branch_pt_score + caat_score + ctcf_score + tata_score
+        cluster_additive = sp3_cluster + sp5_cluster + branch_pt_cluster + caat_cluster + ctcf_cluster + tata_cluster
 
 
         pwm_dict['sp3_count'] = sp3_count
         pwm_dict['sp3_score'] = sp3_score
+        pwm_dict['sp3_cluster'] = sp3_cluster
 
         pwm_dict['sp5_count'] = sp5_count
         pwm_dict['sp5_score'] = sp5_score
+        pwm_dict['sp5_cluster'] = sp5_score
 
         pwm_dict['branch_pt_count'] = branch_pt_count
         pwm_dict['branch_pt_score'] = branch_pt_score
+        pwm_dict['branch_pt_cluster'] = branch_pt_cluster
 
         pwm_dict['caat_count'] = caat_count
         pwm_dict['caat_score'] = caat_score
+        pwm_dict['caat_cluster'] = caat_cluster
 
         pwm_dict['ctcf_count'] = ctcf_count
         pwm_dict['ctcf_score'] = ctcf_score
+        pwm_dict['ctcf_cluster'] = ctcf_cluster
 
         pwm_dict['tata_count'] = tata_count
         pwm_dict['tata_score'] = tata_score
+        pwm_dict['tata_cluster'] = tata_cluster
 
         # totals
         pwm_dict['total_motif_count'] = total_motif_count
         pwm_dict['total_score_shift'] = total_score_shift
+        pwm_dict['total_cluster_shift'] = cluster_additive
 
         return pwm_dict
 
 
     @staticmethod
-    def DNA_pwm_stats(ref_vcf, alt_vcf, flank_length, pwm, ref_section, alt_section, alphabet):
+    def DNA_pwm_stats(ref_vcf, alt_vcf, flank_length, pwm, ref_section, alt_section, alphabet, cluster_threshold):
         """
         CALL ON THIS for DNA sequences
         motif stat changes due to mutation
@@ -247,6 +261,7 @@ class DNAMatrix:
         :param ref_section:
         :param alt_section:
         :param alphabet:
+        :param cluster_threshold:
         :return: quantity [0] and score delta [1]
         """
         search_start = flank_length - global_config['search_radius']
@@ -276,7 +291,12 @@ class DNAMatrix:
         position_score_delta = alt_weighted_score - ref_weighted_score
 
 
-        return motif_quantity_delta, position_score_delta
+        # === cluster composite scoring ===
+        cluster_score = DNAMatrix.cluster_composite_delta(ref_idxs_adjusted, alt_idxs_adjusted,
+                                                          ref_motif_scores, alt_motif_scores, pwm, cluster_threshold)
+
+
+        return motif_quantity_delta, position_score_delta, cluster_score
 
 
     @staticmethod
@@ -292,10 +312,8 @@ class DNAMatrix:
         seq_len = len(sequence)
         idxs, scores = [], []
         for i in range(seq_len - motif_size + 1):  # proper search space handled
-            score = DNAMatrix.probability_subseq(sequence[i:i + motif_size], pwm, alphabet)
-            if score > 0.001:
-                idxs.append(i)
-                scores.append(score)
+            idxs.append(i)
+            scores.append(DNAMatrix.probability_subseq(sequence[i:i + motif_size], pwm, alphabet))
         return idxs, scores
 
 
@@ -410,3 +428,50 @@ class DNAMatrix:
         for motif in regex_list:
             counts.append(len(re.findall(motif, sequence)))
         return sum(counts)
+
+
+    @staticmethod
+    def cluster_composite_delta(ref_idxs, alt_idxs, ref_scores, alt_scores, pwm, threshold):
+        """
+        Determines cluster-composite score
+        :param ref_idxs:
+        :param alt_idxs:
+        :param ref_scores:
+        :param alt_scores:
+        :param pwm:
+        :param threshold:
+        :return:
+        """
+        calc_threshold = DNAMatrix.get_threshold(pwm, threshold)
+        filtref_idxs, filtref_scores = DNAMatrix.index_filter(ref_idxs, ref_scores, calc_threshold)
+        filtalt_idxs, filtalt_scores = DNAMatrix.index_filter(alt_idxs, alt_scores, calc_threshold)
+
+        return (DNAMatrix.cluster_composite_scorer(filtalt_idxs, filtalt_scores) -
+                DNAMatrix.cluster_composite_scorer(filtref_idxs, filtref_scores))
+
+
+    @staticmethod
+    def index_filter(idxs, scores, threshold):
+        filtered_idxs = []
+        filtered_scores = []
+
+        for pair in range(len(idxs)):
+            if scores[pair] >= threshold:
+                filtered_idxs.append(idxs[pair])
+                filtered_scores.append(scores[pair])
+
+        return filtered_idxs, filtered_scores
+
+
+
+    @staticmethod
+    def cluster_composite_scorer(idxs, scores, max_distance=50):
+        cluster_score = 0
+        for pos in range(len(idxs) - 1):
+            distance = idxs[pos+1] - idxs[pos]
+            if distance <= 0:
+                continue
+            if distance <= max_distance:
+                cluster_score += (scores[pos] + scores[pos + 1]) / (distance + 1)
+
+        return cluster_score

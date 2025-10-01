@@ -38,24 +38,38 @@ class LookingGlass:
         dataframe = custom_parse(self.input_file)
         dataframe = pd.DataFrame(dataframe)
 
+        # columns: ReferenceAlleleVCF, AlternateAlleleVCF, Flank_1, Flank_2, Name, Chromosome, ClinicalSignificance
+
+        # ==[Protein extraction + data]==
+        with CompositeProt() as prot_module:
+            composite_df = prot_module.gen_AAseqs(dataframe)
+            prot_df = prot_module.gen_AAfp_dataframe(composite_df)
+
+
         # ==[DNA data]==
         with CompositeDNA() as dna_module:
-            dna_df = dna_module.gen_DNAfp_dataframe(dataframe)
+            dna_df = dna_module.gen_DNAfp_dataframe(composite_df)
 
-        # ==[Protein data]==
-        with CompositeProt() as prot_module:
-            prot_df = prot_module.gen_AAfp_dataframe(dataframe)
+        with DNAMatrix() as dnapwm_module:
+            dnapwm_df = dnapwm_module.gen_DNAPWM_dataframe(composite_df)
 
-        with PosWeightProfiler() as pwm_module:
-            pwm_df = pwm_module.gen_PWM_dataframe(dataframe)
+        with ProtMatrix() as protpwm_module:
+            aapwm_df = protpwm_module.gen_AAPWM_dataframe(composite_df)
 
         # [[Save DataFrame]]
         # ensure alignment - in case something goes wrong with one of them
         dna_df.index = dataframe.index
         prot_df.index = dataframe.index
-        pwm_df.index = dataframe.index
+        dnapwm_df.index = dataframe.index
+        aapwm_df.index = dataframe.index
 
-        variant_df = pd.concat([dna_df, prot_df, pwm_df], axis=1)
+        variant_df = pd.concat([dna_df, prot_df, dnapwm_df, aapwm_df], axis=1)
+
+        useless_columns = ['ref_protein_list', 'alt_protein_list',
+                           'non_ambiguous_ref', 'non_ambiguous_alt',
+                           'ref_protein_length', 'alt_protein_length']
+
+        variant_df = variant_df.drop(useless_columns, axis=1)
 
         return variant_df
 

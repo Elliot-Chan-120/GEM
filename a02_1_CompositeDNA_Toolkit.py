@@ -296,7 +296,10 @@ class CompositeDNA:
             'Start_codons': self.start_delta(ref_buffered, alt_buffered),
             'Stop_codons': self.stop_delta(ref_buffered, alt_buffered),
 
-            # 3 - transcription factor and instability motifs
+            # 3 - intron changes - oh my god i forgot to delete this BEFORE model training so now it has to stay until the next run. will fix this.
+            'Introns': self.intron_delta(ref_buffered, alt_buffered),
+
+            # 4 - transcription factor and instability motifs
             'Poly_tracts': self.poly_tract_delta(ref_buffered, alt_buffered)
         }
 

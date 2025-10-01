@@ -10,7 +10,11 @@ from a02_4_ProtProfiler_Toolkit import *
 import optuna
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, confusion_matrix
+
+import os
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import make_scorer, roc_auc_score, precision_recall_curve, auc, f1_score
 
 
 
@@ -288,6 +292,8 @@ class KeyStone:
             if path.stat().st_size == 0:
                 raise ValueError(f"File {path} is empty")
 
+        # Remember this order for LookingGlass and ReGen
+        # dna, prot, dnapwm, protpwm
         dfs = [
             pd.read_pickle(self.dna_profile_df),
             pd.read_pickle(self.prot_profile_df),
@@ -363,28 +369,23 @@ class KeyStone:
         # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=175)
         # best_params = study.best_params
 
-        best_params = {'n_estimators': 1137,
+        best_params = {'n_estimators': 1674,
                        'max_depth': 10,
-                       'learning_rate': 0.03718094406578397,
-                       'subsample': 0.9805952819119571,
-                       'colsample_bytree': 0.9526753209780319,
-                       'colsample_bylevel': 0.5978955673946482,
-                       'reg_alpha': 0.3468065043758273,
-                       'reg_lambda': 1.9070020123968399,
-                       'gamma': 0.09110912825774864,
-                       'min_child_weight': 2,
-                       'scale_pos_weight': 4.135699653637112}
-
+                       'learning_rate': 0.034561112430304776,
+                       'subsample': 0.9212141915845736,
+                       'colsample_bytree': 0.6016405698933265,
+                       'colsample_bylevel': 0.9329109895929816,
+                       'reg_alpha': 0.7001202050122113,
+                       'reg_lambda': 3.1671750288760134,
+                       'gamma': 1.0033930419124446,
+                       'min_child_weight': 9,
+                       'scale_pos_weight': 1.6075244983571118}
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
 
     def evaluate_save(self, parameters, X_train, y_train, X_test, y_test):
-        import os
-        from sklearn.model_selection import StratifiedKFold
-        from sklearn.metrics import roc_auc_score, precision_recall_curve, auc, f1_score
 
         content = ""
-
         content += f"Optimal Hyperparameters: {parameters}\n"
 
         strat_fold = StratifiedKFold(n_splits = 5, shuffle=True)
@@ -487,17 +488,19 @@ class KeyStone:
             'reg_lambda': trial.suggest_float('reg_lambda', 1.0, 10.0),
             'gamma': trial.suggest_float('gamma', 0, 5),
             'min_child_weight': trial.suggest_int('min_child_weight', 1, 20),
-            'scale_pos_weight': trial.suggest_float('scale_pos_weight', 0.1 * scale_pos_weight, 5.0 * scale_pos_weight),
+            'scale_pos_weight': trial.suggest_float('scale_pos_weight',
+                                                    0.8 * scale_pos_weight,
+                                                    2.0 * scale_pos_weight),
             'objective': 'binary:logistic',
             'tree_method': 'hist',
-            'eval_metric': 'auc',
+            'eval_metric': 'aucpr',
             'n_jobs': -1,
             'random_state': 42
         }
 
         model = XGBClassifier(**params)
-
-        scores = cross_val_score(model, X_train, y_train, cv=5, scoring='roc_auc')
+        f1_scorer = make_scorer(f1_score, pos_label=1)
+        scores = cross_val_score(model, X_train, y_train, cv=5, scoring=f1_scorer)
         return scores.mean()
 
 
@@ -506,3 +509,4 @@ class KeyStone:
             df = pkl.load(infile)
 
         print(df.head(5).to_string())
+

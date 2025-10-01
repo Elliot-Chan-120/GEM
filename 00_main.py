@@ -7,6 +7,7 @@ model_name = "ReGEN_v3"
 # all functions with a name guard need to be called alone
 
 # [1] sourced data extraction and processing
+# - ensure the required files mentioned at the start are downloaded and in the database//datacore folder
 def keystone_dataframe_processing(ml_modelname=model_name):
     test = KeyStone(ml_modelname)
     test.naive_dataframe()
@@ -15,6 +16,7 @@ def keystone_dataframe_processing(ml_modelname=model_name):
 
 
 # [2] feature extraction / engineering
+# note: call each of these sequentially, they each use a multiproc. if name == "__main__" guard like so:
 def keystone_extract_proteins(model = model_name):
     test = KeyStone(model)
     try:
@@ -90,7 +92,7 @@ def keystone_merge(ml_modelname=model_name):
 
 # [4] Model training and optimization
 def keystone_model_training(ml_modelname=model_name):
-    # this process generally takes 2+ hours depending on background tasks
+    # full run will take around 4+ hours - latest optimized hyperparameters will be saved in model_name_stats.txt files
     test = KeyStone(ml_modelname)
     test.train_models()
 
@@ -105,4 +107,4 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
         module.repair()
 
 # [ Command ]
-keystone_model_training()
+Repair_Gene()

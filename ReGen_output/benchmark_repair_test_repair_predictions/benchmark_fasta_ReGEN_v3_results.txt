@@ -1,0 +1,377 @@
+================================================================================
+ReGen Analysis Results: ReGEN_v3 | benchmark_fasta | benchmarkgene1
+================================================================================
+
+ORIGINAL VARIANT STATS: 
+Ref Sequence: GCTGCTGGACCTGCC
+Alt Sequence: G
+Benign % chance: 3.793436
+
+ANALYSIS SUMMARY:
+|- Starting Score: 0.037934
+|- Original Length: 15 bp
+|- Final Variants: 1
+|- Benign Threshold Variants: 20
+|- ReGen config: 50 iterations, 1 copies
+
+MAX BENIGN VARIANTS PER ITERATION:
+--------------------------------------------------
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 88.99482488632202 | Length: 6 bp
+Benign % increase: 85.2013885974884
+   Sequence:
+    GTTCAT
+
+Score: 88.99482488632202 | Length: 6 bp
+Benign % increase: 85.2013885974884
+   Sequence:
+    GTTCAT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 89.52261209487915 | Length: 6 bp
+Benign % increase: 85.72917580604553
+   Sequence:
+    GTTTAT
+
+Score: 89.52261209487915 | Length: 6 bp
+Benign % increase: 85.72917580604553
+   Sequence:
+    GTTTAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 91.90346598625183 | Length: 6 bp
+Benign % increase: 88.11002969741821
+   Sequence:
+    TATTTT
+
+Score: 91.90346598625183 | Length: 6 bp
+Benign % increase: 88.11002969741821
+   Sequence:
+    TATTTT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 92.28566884994507 | Length: 6 bp
+Benign % increase: 88.49223256111145
+   Sequence:
+    TATTAT
+
+Score: 92.28566884994507 | Length: 6 bp
+Benign % increase: 88.49223256111145
+   Sequence:
+    TATTAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 92.28566884994507 | Length: 6 bp
+Benign % increase: 88.49223256111145
+   Sequence:
+    TATTAT
+
+BENIGN THRESHOLD VARIANTS:
+--------------------------------------------------
+Score: 96.85319662094116 | Length: 3 bp
+Benign % increase: 93.05976033210754
+   Sequence:
+    GTT
+
+Score: 89.52261209487915 | Length: 6 bp
+Benign % increase: 85.72917580604553
+   Sequence:
+    GTTTAT
+
+Score: 88.99482488632202 | Length: 6 bp
+Benign % increase: 85.2013885974884
+   Sequence:
+    GTTCAT
+
+Score: 88.60771059989929 | Length: 6 bp
+Benign % increase: 84.81427431106567
+   Sequence:
+    GTTTTT
+
+Score: 81.42400979995728 | Length: 6 bp
+Benign % increase: 77.63057351112366
+   Sequence:
+    GTTATC
+
+Score: 85.76672673225403 | Length: 6 bp
+Benign % increase: 81.97329044342041
+   Sequence:
+    GTTATT
+
+Score: 79.72555756568909 | Length: 6 bp
+Benign % increase: 75.93212127685547
+   Sequence:
+    GTTCGT
+
+Score: 78.90211343765259 | Length: 9 bp
+Benign % increase: 75.10867714881897
+   Sequence:
+    GTTCATCAG
+
+Score: 88.12558650970459 | Length: 6 bp
+Benign % increase: 84.33215022087097
+   Sequence:
+    GTTCAA
+
+Score: 78.29578518867493 | Length: 9 bp
+Benign % increase: 74.50234889984131
+   Sequence:
+    GTTTATCAG
+
+Score: 96.96560502052307 | Length: 3 bp
+Benign % increase: 93.17216873168945
+   Sequence:
+    TAT
+
+Score: 92.28566884994507 | Length: 6 bp
+Benign % increase: 88.49223256111145
+   Sequence:
+    TATTAT
+
+Score: 85.50323843955994 | Length: 6 bp
+Benign % increase: 81.70980215072632
+   Sequence:
+    TATTCG
+
+Score: 87.97065019607544 | Length: 6 bp
+Benign % increase: 84.17721390724182
+   Sequence:
+    TATATT
+
+Score: 91.90346598625183 | Length: 6 bp
+Benign % increase: 88.11002969741821
+   Sequence:
+    TATTTT
+
+Score: 87.87317276000977 | Length: 6 bp
+Benign % increase: 84.07973647117615
+   Sequence:
+    TATTTC
+
+Score: 85.84051132202148 | Length: 6 bp
+Benign % increase: 82.04707503318787
+   Sequence:
+    TATCAA
+
+Score: 81.60790205001831 | Length: 9 bp
+Benign % increase: 77.81446576118469
+   Sequence:
+    TATTTTCAG
+
+Score: 90.77186584472656 | Length: 6 bp
+Benign % increase: 86.97842955589294
+   Sequence:
+    TATCAT
+
+Score: 89.65851664543152 | Length: 6 bp
+Benign % increase: 85.8650803565979
+   Sequence:
+    TATCGT
+
+FINAL VARIANTS:
+--------------------------------------------------
+Score: 92.28566884994507 | Length: 6 bp
+Benign % increase: 88.49223256111145
+   Sequence: 
+    TATTAT
+

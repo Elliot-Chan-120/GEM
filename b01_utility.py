@@ -67,7 +67,9 @@ def custom_parse(fasta_filepath):
 
 def feature_filter(X_features):
     """
-    Selectively removes features depending on their importance scores
+    Selectively removes features depending on their importance scores.
+    Will make this a thing once I figure out DataSift...
+    I'd like it to outperform the actual XGB model's weighting in terms of overall efficiency. Same result less time?
     :param X_features:
     :return: Filtered features with greater importances
     """

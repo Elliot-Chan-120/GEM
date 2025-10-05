@@ -4,8 +4,8 @@ from pyfaidx import Fasta
 
 from a02_1_CompositeDNA_Toolkit import *
 from a02_2_CompositeProt_Toolkit import *
-from a02_3_DNAProfiler_Toolkit import *
-from a02_4_ProtProfiler_Toolkit import *
+from a02_3_DNAMatrix_Toolkit import *
+from a02_4_ProtMatrix_Toolkit import *
 
 import optuna
 from xgboost import XGBClassifier
@@ -451,7 +451,7 @@ class KeyStone:
         cm = confusion_matrix(y_test, y_pred_optimal, labels=[0, 1])
         content += "Confusion Matrix:\n"
         content += str(cm)
-        content += "\n"
+        content += "\n----------------------------------------------\n"
 
         feature_importances = model.feature_importances_
         featimp_df = pd.DataFrame({

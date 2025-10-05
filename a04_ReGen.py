@@ -11,8 +11,8 @@ import sklearn
 # file imports - will need more thorough error handling later on
 from a02_1_CompositeDNA_Toolkit import CompositeDNA
 from a02_2_CompositeProt_Toolkit import CompositeProt
-from a02_3_DNAProfiler_Toolkit import *
-from a02_4_ProtProfiler_Toolkit import *
+from a02_3_DNAMatrix_Toolkit import *
+from a02_4_ProtMatrix_Toolkit import *
 from a03_LookingGlass import *
 from b00_bio_library import ALL_AA_COMBINATIONS
 from b01_utility import custom_parse

@@ -2,7 +2,7 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-model_name = "ReGEN_v3"
+model_name = "v4_test"
 
 # all functions with a name guard need to be called alone
 
@@ -106,5 +106,6 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
         module = ReGen(pathogenic_gene_file, ml_model, outfile_name)
         module.repair()
 
+
 # [ Command ]
-Repair_Gene()
+keystone_model_training()

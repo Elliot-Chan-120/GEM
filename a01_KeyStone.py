@@ -323,7 +323,9 @@ class KeyStone:
                            'ref_protein_length', 'alt_protein_length']
 
         variant_dataframe = variant_dataframe.drop(useless_columns, axis=1)
-        print(variant_dataframe.columns)
+
+        for label in variant_dataframe.columns:
+            print(label)
 
         self.optimized_model(variant_dataframe)
 

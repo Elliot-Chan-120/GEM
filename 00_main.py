@@ -2,7 +2,7 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-model_name = "v4_test"
+model_name = "ReGen_v4"
 
 # all functions with a name guard need to be called alone
 
@@ -52,7 +52,7 @@ def ks_prot_profile(model = model_name):
         raise
 
 def ks_dnamotif_profile(model = model_name):
-    # 40 minutes
+    # 1.5 hours
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
@@ -64,7 +64,7 @@ def ks_dnamotif_profile(model = model_name):
         raise
 
 def ks_aamotif_profile(model = model_name):
-    # 12 minutes
+    # 30 minutes
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
@@ -77,8 +77,6 @@ def ks_aamotif_profile(model = model_name):
 
 # [3] Feature dataframe merging
 def keystone_merge(ml_modelname=model_name):
-    # [Generating DNA mutation fingerprints]: 100%|██████████| 378862/378862 [13:19<00:00, 473.69it/s]
-    # [Generating AA chain mutation fingerprints]: 100%|██████████| 378862/378862 [1:30:27<00:00, 69.81it/s]
     test = KeyStone(ml_modelname)
 
     try:
@@ -92,7 +90,7 @@ def keystone_merge(ml_modelname=model_name):
 
 # [4] Model training and optimization
 def keystone_model_training(ml_modelname=model_name):
-    # full run will take around 4+ hours - latest optimized hyperparameters will be saved in model_name_stats.txt files
+    # full run will take around 6 hours - latest optimized hyperparameters will be saved in model_name_stats.txt files
     test = KeyStone(ml_modelname)
     test.train_models()
 
@@ -108,4 +106,5 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
 
 
 # [ Command ]
-keystone_model_training()
+Repair_Gene()
+

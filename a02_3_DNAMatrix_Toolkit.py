@@ -629,9 +629,9 @@ class DNAMatrix:
             else:
                 prob = pwm[i][alphabet[base]]
 
-            if prob <= 1e-9:
-                return 0  # if a subseq contains the character with 0 probability -> not possible it's the motif
-                          # therefore return a score of 0
+            # handle 0s
+            if prob <= 0:
+                return 0
 
             total_score += np.log2(prob / background_prob)
 

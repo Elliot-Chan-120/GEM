@@ -1,0 +1,150 @@
+Optimal Hyperparameters: {'n_estimators': 1674, 'max_depth': 10, 'learning_rate': 0.034561112430304776, 'subsample': 0.9212141915845736, 'colsample_bytree': 0.6016405698933265, 'colsample_bylevel': 0.9329109895929816, 'reg_alpha': 0.7001202050122113, 'reg_lambda': 3.1671750288760134, 'gamma': 1.0033930419124446, 'min_child_weight': 9, 'scale_pos_weight': 1.6075244983571118}
+Cross Validation Results: Mean ROC AUC: 0.8920, Mean PR AUC: 0.8874
+Mean FNs: 5478.60, Mean FPs: 5833.60
+ROC AUC: 0.8939
+Precision-Recall AUC: 0.8900
+Pathogenic F1-Score: 0.7995
+Optimal threshold for pathogenic detection: 0.480
+Performance with optimal threshold:
+              precision    recall  f1-score   support
+
+           0       0.84      0.82      0.83     41774
+           1       0.79      0.81      0.80     34814
+
+    accuracy                           0.82     76588
+   macro avg       0.81      0.82      0.81     76588
+weighted avg       0.82      0.82      0.82     76588
+Confusion Matrix:
+[[34247  7527]
+ [ 6586 28228]]
+----------------------------------------------
+Introns: 0.0000
+kozak_cluster: 0.0000
+ctcf_cluster: 0.0000
+sp5_count: 0.0000
+polyad_count: 0.0000
+PTR_motif_count: 0.0000
+branch_pt_count: 0.0000
+sp5_cluster: 0.0000
+ap1_count: 0.0000
+ap1_cluster: 0.0000
+creb_cluster: 0.0000
+creb_count: 0.0000
+TF_motif_count: 0.0000
+nfkb_count: 0.0000
+caat_cluster: 0.0000
+caat_count: 0.0000
+sp3_count: 0.0000
+TOTAL_DNA_MOTIF_COUNT: 0.0000
+ubiq_domain_cluster_delta: 0.0016
+ubiq_clusters_composite_delta: 0.0018
+ubiq_score_delta: 0.0021
+nfkb_cluster: 0.0023
+phos_domain_cluster_delta: 0.0026
+1433_count_delta: 0.0026
+phos_clusters_composite_delta: 0.0027
+NES_count_delta: 0.0027
+glyc_clusters_composite_delta: 0.0028
+FI_Proline_Structs: 0.0028
+1433_cluster_domain_delta: 0.0028
+glyc_domain_cluster_delta: 0.0028
+1433_clusters_delta: 0.0029
+nfkb_score: 0.0029
+Total_PTM_cluster_composite_delta: 0.0029
+glyc_score_delta: 0.0029
+1433_score_delta: 0.0029
+phos_score_delta: 0.0030
+FI_fold_composite: 0.0031
+Secondary_struct_propensity: 0.0031
+SH2_domain_cluster_score: 0.0031
+FI_Charge_Hydro: 0.0032
+Nuclear_Signal_delta: 0.0032
+Aliphatic_delta: 0.0032
+FI_Hydro_Structs: 0.0033
+FI_Secondary_Global: 0.0033
+phos_count_delta: 0.0033
+NLS_count_delta: 0.0033
+Net_charge_delta: 0.0033
+FI_Stability_composite: 0.0034
+ctcf_count: 0.0034
+FI_Relative_weight: 0.0034
+SH2_score_delta: 0.0035
+SH2_clusters_delta: 0.0036
+Proline_delta: 0.0036
+FI_Relative_length_context: 0.0036
+Length_change: 0.0037
+Isoelectric_delta: 0.0037
+TOTAL_DNA_MOTIF_SCORE: 0.0038
+AA_Local_score: 0.0038
+TF_score_shift: 0.0038
+NES_cluster_delta: 0.0038
+AA_Global_score: 0.0038
+ubiq_count_delta: 0.0039
+TOTAL_DNA_MOTIF_CLUSTER: 0.0039
+FI_Iso_Hydro: 0.0039
+FI_Relative_stability: 0.0040
+Molecular_weight_delta: 0.0041
+branch_pt_cluster: 0.0041
+Hydrophobicity_delta: 0.0042
+glyc_count_delta: 0.0042
+PTR_domain_cluster_shift: 0.0042
+init_score_shift: 0.0043
+SH2_count_delta: 0.0043
+TOTAL_DNA_MOTIF_DOMAIN_CLUSTER: 0.0044
+NLS_cluster_delta: 0.0046
+init_cluster_shift: 0.0046
+Chromosome_density: 0.0046
+tata_score: 0.0047
+init_domain_cluster_shift: 0.0047
+FI_charge_composite: 0.0048
+init_motif_count: 0.0048
+Half_life_delta: 0.0049
+TF_cluster_shift: 0.0050
+PTR_cluster_shift: 0.0051
+sp1_score: 0.0052
+Hairpins: 0.0052
+Total_Nuclear_Cluster_delta: 0.0053
+GC_context_delta: 0.0054
+TF_domain_cluster_shift: 0.0055
+sp1_cluster: 0.0057
+kozak_count: 0.0057
+ctcf_score: 0.0058
+sp3_score: 0.0060
+Chromosome: 0.0063
+inr_cluster: 0.0064
+polyad_cluster: 0.0067
+Local_pct: 0.0077
+Shannon_entropy: 0.0079
+tata_cluster: 0.0082
+Tandem_Duplications: 0.0085
+inr_score: 0.0085
+sp1_count: 0.0089
+Start_codons: 0.0100
+sp3_cluster: 0.0101
+polyad_score: 0.0105
+relative_local: 0.0106
+Insertion_length: 0.0108
+sp5_score: 0.0110
+inr_count: 0.0114
+caat_score: 0.0115
+Global_score: 0.0117
+kozak_score: 0.0132
+branch_pt_score: 0.0132
+PTR_score_shift: 0.0143
+Local_score: 0.0144
+Poly_tracts: 0.0153
+tata_count: 0.0158
+Thermodynamic_stability: 0.0159
+FI_Mutation_propensity: 0.0170
+FI_Mutation_composite: 0.0177
+FI_Weight_life: 0.0185
+Global_pct: 0.0192
+creb_score: 0.0199
+FI_General_Stability: 0.0207
+SNVs: 0.0221
+FI_relative_global: 0.0239
+ap1_score: 0.0239
+Length_change_context: 0.0324
+AA_Global_pct: 0.0743
+Stop_codons: 0.0780
+Microsatellites: 0.0827

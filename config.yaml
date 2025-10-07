@@ -84,6 +84,8 @@ protein_gap_penalty: -8
 
 # [Motif Search Settings]
 motif_search_radius: 150  # reasonable length
+dna_cluster_distance: 50  # base pairs
+aa_cluster_distance: 30   # amino acids
 
 
 # ==================================

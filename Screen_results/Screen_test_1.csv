@@ -1,3 +1,3 @@
 Name,Predicted_Class,Prob_Benign,Prob_Pathogenic
-benchmarkgene1,1,0.037934363,0.96206564
-benchmarkgene2,1,0.0062907934,0.9937092
+benchmarkgene1,1,0.026314199,0.9736858
+benchmarkgene2,1,0.031000197,0.9689998

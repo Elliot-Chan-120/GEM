@@ -82,6 +82,35 @@ It includes:
   - Interaction terms (e.g. charge-hydrophobicity)
   - Relative metrics normalized by protein length
 
+**DNAMatrix - regulatory motif analysis**
+
+*Captures how variants disrupt DNA-level regulatory architecture through multi-dimensional scoring of transcriptional and post-transcriptional control.*
+
+Scans variety of motifs found in 3 regulatory domains: 
+
+- initiation signals: initiator, TATA box, Kozak Sequence
+- transcription factors: CTCF, CAAT, SP1, NF-kB, AP1, CREB
+- post-transcriptional regulatory elements: 5’/3’ splice sites, branch points, polyadenylation signals
+
+Each motif is scored using position-weight matrices with a Gaussian-weighted distance decay function that assigns higher impact to disruptions near the variant site. The module calculates three complementary metrics across individual motif, domain, and total DNA levels:
+
+- raw motif count changes
+- position-weighted score shifts
+- cluster composite scores to detect synergistic effects when multiple binding sites are disrupted within close proximity. The distance threshold is configurable (30bp default).
+
+By aggregating individual motif disruptions into domain-level cluster scores, the system identifies coordinated regulatory breakdowns that simple count-based methods would miss. 
+
+ProtMatrix - protein motif analysis
+
+*Extends variant impact assessment to the protein level, analyzing amino acid changes and disruptions in post-translational modification sites and protein-protein interaction domains. Profiles four major regulatory systems:*
+
+- phosphorylation sites: CDK, cAMP-PKA, CK2, Tyrosine Kinase
+- glycosylation sites: N-glycosylation consensus sequences
+- ubiquitination signals: D-box, KEN-box degrons
+- interaction domains: SH2 family, 14-3-3 binding sites, pdz domains, nuclear localization and export signals
+
+Since proteins sequences are extrapolated without genomic coordinates but from translation likelihood calculations, the module employs PWM scanning combined with regex pattern matching for canonical motifs. Similar cluster composite scoring is implemented, capturing the disruption of spatially clustered PTM sites or binding domains.
+
 \
 **ReGen: Therapeutic Optimization**
 
@@ -106,6 +135,18 @@ Protein analysis was a big hurdle, as I had find a way to balance processing pow
 Naive approaches to analyzing the protein level would involve brute-force scanning of all 6 reading frames, then scanning for all possible ORFs, extracting all sequences, then conducting analyses on all of them then doing that again for variant comparison. So there's 6 RFs, most likely multiple ORFs in each, and we probably have to compare the average of those results between 2 sequences 380k+ times. This would, at best, nuke my computer. The solution to this would be to preprocess the entire sequence first, then determine its protein translation efficiency.
 
 I started off with scanning for start and stop codons, tracking the positions where they appeared. Valid potential reading frames that started and ended with in-frame start and stop codons (% 3 == 0) and had no in-frame stop codons inside were saved, then scanned for a Kozak motif. A Kozak motif generally looks like this "gccA/Gcc[AUG]G" around the [start codon] ATG / AUG (mRNA), where the capital letters represent the most important positions. It is a powerful predictor of translation initiation, so if you find it, there is a high chance protein translation will initiate immediately after. Generally, the largest ORF is the one that will encode the protein. By searching for the Kozak motif and getting the length of all potential ORFs, we can generate a score for each, where the highest-scoring ORF is one we can safely assume will encode the protein.
+
+### Motif Analysis Strategy
+The previous version focused on extracting predictive features relying on sequence conservation and direct protein structure disruption. However, I felt that it was missing a critical later: regulatory context.
+A variant in a highly conserved region might be benign if it doesn't disrupt any motifs contributing to regulatory logic, while a variant in another region could be pathogenic if it breaks a critical cluster / regulatory hub.
+The main challenge I found here was finding a way to accurately capture these effects on a scale, not just binary to really capture relevant, diverse biological signals.
+
+I chose to detect disruptions of a suite of motifs on both the DNA and protein level via Position Weight Matrices, which represent the degenerate nature of motifs in real biological systems.
+To further amplify the signals' biological meaning, I developed the toolkit with a Gaussian-weighted distance decay scoring mechanism combined with a cluster-composite scoring system. 
+This meant that disruptions to motifs occurring close the mutation site's window were scored higher than those further away. 
+
+Regulatory elements rarely function in isolation, in many cases breaking one regulatory site is less severe than compromising an entire regulatory hub, hence the implementation of a cluster composite scoring algorithm.
+Unlike simply counting motifs, this identifies synergistic disruption, when variants don't remove individual sites but break down coordinated regulatory 'clusters'.
 
 ### Flexible Multiprocessing
 Both CompositeDNA and CompositeProt were optimized with multiprocessing by initializing a multiprocessing pool upon class instantiation, terminating automatically when under a context manager (with xyz as CompositeDNA/Prot(core_num=max_cores-2)).
@@ -148,79 +189,130 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-# Parse and filter for high-confidence data on Benign and Pathogenic variants from ClinVar
-# Unzips human genome file, and uses the assembly report to help cross-reference variant locations
-# Using the parsed locations, acquires flanking regions of configurable bps (default = 500bp)
-# Neatly formats everything into a dataframe for downstream operations
-def keystone_p1_demo(ml_modelname='ReGen_v2'):
+# all functions with a name guard need to be called alone
+
+# [1] sourced data extraction and processing
+# - ensure the required files mentioned at the start are downloaded and in the database//datacore folder
+def keystone_dataframe_processing(ml_modelname=model_name):
     test = KeyStone(ml_modelname)
     test.naive_dataframe()
     test.decompress_genome()
     test.context_dataframe()
 
-    
-# With the previously built dataframe, runs the DNA and Protein Analysis toolkits on them to generate mutation profile dataframe
-def keystone_p2_demo(ml_modelname='ReGen_v2'):
-    # this process takes around 1:50 minutes generally depending on background tasks
-    # [Generating DNA mutation fingerprints]: 100%|██████████| 378862/378862 [13:19<00:00, 473.69it/s]
-    # [Generating AA chain mutation fingerprints]: 100%|██████████| 378862/378862 [1:30:27<00:00, 69.81it/s]
-    test = KeyStone(ml_modelname)
 
+# [2] feature extraction / engineering
+# note: call each of these sequentially, they each use a multiproc. if name == "__main__" guard like so:
+def keystone_extract_proteins(model = model_name):
+    test = KeyStone(model)
     try:
         if __name__ == "__main__":
-            success = test.generate_fp()
+            success = test.protein_extraction()
             if success:
-                print("[[Fingerprint DataFrame Generation Completed]]")
+                print("[Protein Sequence Extraction Completed]")
     except Exception as e:
         print(f"Mutation Fingerprint Generation Failed: {e}")
         raise
 
+def ks_dna_profile(model = model_name):
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success = test.generate_dna_profile()
+            if success:
+                print("[DNA Profile Completed]")
+    except Exception as e:
+        print(f"DNA Fingerprint Generation Failed: {e}")
+        raise
 
-# Initializes an XGB model and optimizes its hyperparameters with Optuna
-def keystone_p3_demo(ml_modelname='ReGen_v2'):
+def ks_prot_profile(model = model_name):
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success = test.generate_prot_profile()
+            if success:
+                print("[Protein Profile Completed]")
+    except Exception as e:
+        print(f"Protein Fingerprint Generation Failed: {e}")
+        raise
+
+def ks_dnamotif_profile(model = model_name):
+    # 1.5 hours
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success  = test.generate_dnapwm_profile()
+            if success:
+                print("[PWM Profile Completed]")
+    except Exception as e:
+        print(f"PWM Fingerprint Generation Failed: {e}")
+        raise
+
+def ks_aamotif_profile(model = model_name):
+    # 30 minutes
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success  = test.generate_aapwm_profile()
+            if success:
+                print("[PWM Profile Completed]")
+    except Exception as e:
+        print(f"PWM Fingerprint Generation Failed: {e}")
+        raise
+
+# [3] Feature dataframe merging
+def keystone_merge(ml_modelname=model_name):
+    test = KeyStone(ml_modelname)
+
+    try:
+        if __name__ == "__main__":
+            success = test.get_final_dataframe()
+            if success:
+                print("[Fingerprint DataFrame Generation Completed]")
+    except Exception as e:
+        print(f"Mutation Fingerprint Generation Failed: {e}")
+        raise
+
+# [4] Model training and optimization
+def keystone_model_training(ml_modelname=model_name):
+    # full run will take around 6 hours - latest optimized hyperparameters will be saved in model_name_stats.txt files
     test = KeyStone(ml_modelname)
     test.train_models()
 
-
-# When provided with a correctly-formatted special FASTA file (example provided in gene_databank folder), will classify each variant as benign or pathogenic
-def LookingGlass_Demo(fasta_filename='test.fasta', ml_model='ReGen_v2', output_filename='Screen_test_1'):
+def LookingGlass_Demo(fasta_filename='test.fasta', ml_model=model_name, output_filename='Screen_test_1'):
     test_module = LookingGlass(fasta_filename, ml_model)
     if __name__ == "__main__":
         test_module.predict_file(output_filename)
 
-
-# Utilizes an intelligent sequence of guided mutations and plateau-breaking stochastic mutations to optimize variants towards benign classification
-def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model='ReGen_v2', outfile_name='benchmark_repair_test'):
+def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, outfile_name='benchmark_repair_test'):
     if __name__ == "__main__":
         module = ReGen(pathogenic_gene_file, ml_model, outfile_name)
         module.repair()
+
 ```
 
 
-## [2.1] Current Model Stats - ReGen_v2
+## [2.1] Current Model Stats - ReGen_v4
 ```
-Model: ReGen_v2
+Model: ReGen_v4
 
-Optimal Hyperparameters: {'n_estimators': 1936, 'max_depth': 10, 'learning_rate': 0.041977875319094894, 'subsample': 0.8691093047813849, 'colsample_bytree': 0.9973783186852718, 'reg_alpha': 0.20907871533405323, 'reg_lambda': 1.6124970064334614, 'gamma': 0.35865668074613577, 'scale_pos_weight': 1.8996291716997067}
-Cross Validation Results: Mean ROC AUC: 0.8744, Mean PR AUC: 0.8684
-Mean FNs: 5601.00, Mean FPs: 6627.00
-ROC AUC: 0.8783
-Precision-Recall AUC: 0.8739
-Pathogenic F1-Score: 0.7885
-Optimal threshold for pathogenic detection: 0.513
+Cross Validation Results: Mean ROC AUC: 0.8920, Mean PR AUC: 0.8874
+Mean FNs: 5478.60, Mean FPs: 5833.60
+ROC AUC: 0.8939
+Precision-Recall AUC: 0.8900
+Pathogenic F1-Score: 0.7995
+Optimal threshold for pathogenic detection: 0.480
 Performance with optimal threshold:
               precision    recall  f1-score   support
 
-           0       0.83      0.81      0.82     41774
-           1       0.78      0.80      0.79     34814
+           0       0.84      0.82      0.83     41774
+           1       0.79      0.81      0.80     34814
 
-    accuracy                           0.81     76588
-   macro avg       0.80      0.81      0.80     76588
-weighted avg       0.81      0.81      0.81     76588
-
+    accuracy                           0.82     76588
+   macro avg       0.81      0.82      0.81     76588
+weighted avg       0.82      0.82      0.82     76588
 Confusion Matrix:
-[[33884  7890]
- [ 6987 27827]]
+[[34247  7527]
+ [ 6586 28228]]
 ```
 
 
@@ -252,100 +344,65 @@ CTGCTTGACGGCGGTGCTGGACCTGCAGCTCAGGTGGGCCCCTCACCCTCTGCCAGCGCTGCGTCT
 *LookingGlass output from the test gene file*
 ```
 Name,Predicted_Class,Prob_Benign,Prob_Pathogenic
-benchmarkgene1,1,0.03290087,0.96709913
-benchmarkgene2,1,0.0022346973,0.9977653
+benchmarkgene1,1,0.026314199,0.9736858
+benchmarkgene2,1,0.031000197,0.9689998
 ```
 
 ## ReGen example Input and Results
 Note: Users need to insert a FASTA file of the same custom format in the ReGen_input folder
 ```
 ================================================================================
-ReGen Analysis Results: ReGen_v2 | benchmark_fasta | benchmarkgene1
+ReGen Analysis Results: ReGen_v4 | benchmark_fasta | benchmarkgene1
 ================================================================================
 
 ORIGINAL VARIANT STATS: 
 Ref Sequence: GCTGCTGGACCTGCC
 Alt Sequence: G
-Benign % chance: 3.290087
+Benign % chance: 2.631420
 
 ANALYSIS SUMMARY:
-|- Starting Score: 0.032901
+|- Starting Score: 0.026314
 |- Original Length: 15 bp
 |- Final Variants: 1
-|- Benign Threshold Variants: 9
+|- Benign Threshold Variants: 1
 |- ReGen config: 50 iterations, 1 copies
 
 MAX BENIGN VARIANTS PER ITERATION:
 --------------------------------------------------
-Score: 88.53713274002075 | Length: 3 bp
-Benign % increase: 85.24704575538635
+Score: 67.49681830406189 | Length: 3 bp
+Benign % increase: 64.86539840698242
    Sequence:
-    GTC
+    GTA
 
-Note: Top performing genes from every iteration are listed here, I'm skipping the other 49 as there was no improvement
-
-Score: 91.5849506855011 | Length: 3 bp
-Benign % increase: 88.2948637008667
+Score: 71.39513492584229 | Length: 6 bp
+Benign % increase: 68.76371502876282
    Sequence:
-    ATC
+    GTATTA
 
-BENIGN THRESHOLD VARIANTS:  
+Note: Top performing genes from every iteration are listed here, I'm skipping the others as there was no improvement
+
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+BENIGN THRESHOLD VARIANTS: <- these are the variants that surpassed user-defined threshold
 --------------------------------------------------
-Note: these are all the variants found that exceed a config-defined 'benign' score threshold (default 0.75. 75%)
-
-Score: 88.53713274002075 | Length: 3 bp
-Benign % increase: 85.24704575538635
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
    Sequence:
-    GTC
-
-Score: 79.46057319641113 | Length: 6 bp
-Benign % increase: 76.17048621177673
-   Sequence:
-    GTCGTC
-
-Score: 78.1769871711731 | Length: 6 bp
-Benign % increase: 74.8869001865387
-   Sequence:
-    GTCATC
-
-Score: 76.32622122764587 | Length: 6 bp
-Benign % increase: 73.03613424301147
-   Sequence:
-    GTCATA
-
-Score: 91.5849506855011 | Length: 3 bp
-Benign % increase: 88.2948637008667
-   Sequence:
-    ATC
-
-Score: 80.94335794448853 | Length: 6 bp
-Benign % increase: 77.65327095985413
-   Sequence:
-    ATCGTA
-
-Score: 75.44633150100708 | Length: 6 bp
-Benign % increase: 72.15624451637268
-   Sequence:
-    ATCATA
-
-Score: 79.13466691970825 | Length: 6 bp
-Benign % increase: 75.84457993507385
-   Sequence:
-    ATCAGT
-
-Score: 75.60388445854187 | Length: 6 bp
-Benign % increase: 72.31379747390747
-   Sequence:
-    ATCATC
+    TTA
 
 FINAL VARIANTS:
 --------------------------------------------------
-Score: 91.5849506855011 | Length: 3 bp
-Benign % increase: 88.2948637008667   Sequence: 
-    ATC
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence: 
+    TTA
 ```
 Multiple copies can be run simultaneously, I just personally chose to run with 1 for ease of debugging, as it was easier to keep track of the 1.
-
+More copies and iterations generally will get better results.
 
 ## Configuration
 All parameters are configurable via 'config.yaml', this is a demo section:

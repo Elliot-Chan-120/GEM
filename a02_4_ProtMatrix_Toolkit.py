@@ -81,6 +81,7 @@ class ProtMatrix:
         # create config for downstream multiproc
         # these get added to global_config -> e.g. pwm = global_config['pwm_name_here']
         self.config = {
+            'cluster_distance_threshold': self.cfg['aa_cluster_distance'],
 
             # [Post-translational modification motifs]
             # - Phosphorylation motifs
@@ -596,11 +597,11 @@ class ProtMatrix:
         all_ref_scores.extend(wminus1_ref_scores)
         all_alt_scores.extend(wminus1_alt_scores)
 
-        sh2_dict['pdz_count_delta'] = dvl_count + class1_count + class2_count + class3_count + wminus1_count
-        sh2_dict['pdz_score_delta'] = dvl_score + class1_score + class2_score + class3_score + wminus1_score
+        sh2_dict['sh2_count_delta'] = dvl_count + class1_count + class2_count + class3_count + wminus1_count
+        sh2_dict['sh2_score_delta'] = dvl_score + class1_score + class2_score + class3_score + wminus1_score
 
         # addition of every individual cluster score shift
-        sh2_dict['pdz_clusters_delta'] = dvl_cluster + class1_cluster + class2_cluster + class3_cluster + wminus1_cluster
+        sh2_dict['sh2_clusters_delta'] = dvl_cluster + class1_cluster + class2_cluster + class3_cluster + wminus1_cluster
 
         cluster_score_domain_delta = (ProtMatrix.cluster_composite_scorer(all_alt_idxs, all_alt_scores) -
                                       ProtMatrix.cluster_composite_scorer(all_ref_idxs, all_ref_scores))
@@ -673,12 +674,11 @@ class ProtMatrix:
 
         nuc_idx = np.fromiter((alphabet[c] for c in subseq), dtype=np.int8)
         probs = pwm[np.arange(len(subseq)), nuc_idx]
-        # handle 0s
 
+        # handle 0s and replace with small value
         if (probs <= 1e-9).any():
             return 0
 
-        probs = np.maximum(probs, 1e-10)
         scores = np.log2(probs / background_prob)
         return scores.sum()
 
@@ -741,13 +741,13 @@ class ProtMatrix:
         return filtered_idxs, filtered_scores
 
     @staticmethod
-    def cluster_composite_scorer(idxs, scores, max_distance=30):
+    def cluster_composite_scorer(idxs, scores):
         cluster_score = 0
         for pos in range(len(idxs) - 1):  # motifs within 30 are usually considered to be a cluster (maybe change this if proven otherwise)
             distance = idxs[pos + 1] - idxs[pos]
             if distance <= 0:
                 continue
-            if distance <= max_distance:
+            if distance <= global_config['cluster_distance_threshold']:
                 cluster_score += (scores[pos] + scores[pos + 1]) / (distance + 1)
 
         return cluster_score

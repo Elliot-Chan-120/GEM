@@ -31,4 +31,22 @@ ReGen output fixes
 
 * output txt file contains proper output, was previously outputting the reference under the label 'original variant'
 * now in original variant stats, shows both ref and alt allele vcfs
-* fixed benign threshold gene variants not all being represented
+
+Regen tweaks
+
+* users can now determine how many stochastic mutations occur in config
+
+10/7/2025 GEM v2.0.0 - motif analysis update: DNAMatrix, ProtMatrix and other fixes
+
+
+Added two PWM-based scoring modules employing cluster-disruption algorithms and multidimensional regulatory element analyses of both DNA and Protein sequences
+
+*DNAMatrix*
+- Analyzes initiation signals, transcription factors and post-transcriptional elements
+- Gaussian-weighted distance decay function prioritizing proximal disruptions to mutation site
+
+*ProtMatrix*
+- Analyzes phosphorylation, glycosylation, ubiquitination sites and interaction domains
+- Integrated with translation likelihood calculations for coordinate-independent analyses
+
+Refer to README.md for a more thorough breakdown.

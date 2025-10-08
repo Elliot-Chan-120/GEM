@@ -12,6 +12,7 @@ GEM (Gene Edit Machine) is a machine learning-powered platform designed to class
 What makes this a GEM?
 - integrates ClinVar and GRCh38 human genome assembly data to build detailed, context-inclusive sequences
 - uses biochemical data and research-backed feature extraction at both the DNA and protein level
+- detects and extracts regulatory region disruptions in various domains on both DNA and protein levels
 - trains optimized XGBoost models to classify benign and pathogenic mutation variants
 - suggests guided edits to reduce variant pathogenicity
 
@@ -27,7 +28,7 @@ It includes:
   - Data processing
     - Quality Filtering: removes uncertain classifications and focuses on high-confidence Benign/Pathogenic variants
     - Context Extraction: configurable flanking sequence windows around variants
-  - Feature Engineering is done through classes CompositeDNA and CompositeProt, elaborated on below
+  - Feature Engineering is done through classes CompositeDNA, CompositeProt, DNAMatrix and ProtMatrix, elaborated on below
   - Machine Learning Optimization and Evaluation
     - XGB classifiers undergo Optuna hyperparameter tuning (pre-computed optimal settings provided in pipeline)
     - Stratified k-fold validation, weighted sampling, threshold optimization
@@ -82,6 +83,7 @@ It includes:
   - Interaction terms (e.g. charge-hydrophobicity)
   - Relative metrics normalized by protein length
 
+\
 **DNAMatrix - regulatory motif analysis**
 
 *Captures how variants disrupt DNA-level regulatory architecture through multi-dimensional scoring of transcriptional and post-transcriptional control.*
@@ -100,7 +102,8 @@ Each motif is scored using position-weight matrices with a Gaussian-weighted dis
 
 By aggregating individual motif disruptions into domain-level cluster scores, the system identifies coordinated regulatory breakdowns that simple count-based methods would miss. 
 
-ProtMatrix - protein motif analysis
+\
+**ProtMatrix - protein motif analysis**
 
 *Extends variant impact assessment to the protein level, analyzing amino acid changes and disruptions in post-translational modification sites and protein-protein interaction domains. Profiles four major regulatory systems:*
 
@@ -109,7 +112,7 @@ ProtMatrix - protein motif analysis
 - ubiquitination signals: D-box, KEN-box degrons
 - interaction domains: SH2 family, 14-3-3 binding sites, pdz domains, nuclear localization and export signals
 
-Since proteins sequences are extrapolated without genomic coordinates but from translation likelihood calculations, the module employs PWM scanning combined with regex pattern matching for canonical motifs. Similar cluster composite scoring is implemented, capturing the disruption of spatially clustered PTM sites or binding domains.
+Since protein sequences are extrapolated without genomic coordinates but from translation likelihood calculations, the module employs PWM scanning combined with regex pattern matching for canonical motifs. Similar cluster composite scoring is implemented, capturing the disruption of spatially clustered PTM sites or binding domains.
 
 \
 **ReGen: Therapeutic Optimization**
@@ -299,7 +302,7 @@ Cross Validation Results: Mean ROC AUC: 0.8920, Mean PR AUC: 0.8874
 Mean FNs: 5478.60, Mean FPs: 5833.60
 ROC AUC: 0.8939
 Precision-Recall AUC: 0.8900
-Pathogenic F1-Score: 0.7995
+Pathogenic F1-Score: 0.7995  <-- basically 0.800 :)
 Optimal threshold for pathogenic detection: 0.480
 Performance with optimal threshold:
               precision    recall  f1-score   support

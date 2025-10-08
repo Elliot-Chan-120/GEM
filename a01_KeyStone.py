@@ -1,15 +1,20 @@
 import gzip
 import pickle as pkl
-from pathlib import Path
 from pyfaidx import Fasta
 
 from a02_1_CompositeDNA_Toolkit import *
 from a02_2_CompositeProt_Toolkit import *
+from a02_3_DNAMatrix_Toolkit import *
+from a02_4_ProtMatrix_Toolkit import *
 
+import optuna
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
-import optuna
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, confusion_matrix
+
+import os
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import make_scorer, roc_auc_score, precision_recall_curve, auc, f1_score
 
 
 
@@ -27,21 +32,32 @@ class KeyStone:
             self.cfg = yaml.safe_load(outfile)
 
         # Navigation
-        self.clinvar_data = Path(self.cfg['database_folder']) / self.cfg['clinvar_data']
-        self.genome_gz = Path(self.cfg['database_folder']) / self.cfg['GRCh38_gz']
-        self.genome_decomp = Path(self.cfg['database_folder']) / self.cfg['GRCh38_fna']
+        self.database = Path(self.cfg['database_folder'])  # main database folder
+        self.datacore = self.database / self.cfg['datacore_folder']
+        self.clinvar_data = self.datacore / self.cfg['clinvar_data']
+        self.genome_gz = self.datacore / self.cfg['GRCh38_gz']
+        self.genome_decomp = self.datacore / self.cfg['GRCh38_fna']
 
-        self.naivefile_df_outpath = Path('database') / f"{self.cfg['ref_alt_df']}.csv"
-        self.context_df_outpath = Path('database') / f"{self.cfg['context_df']}.pkl"
+        self.naivefile_df_outpath = self.database / f"{self.cfg['ref_alt_df']}.csv"
+        self.context_df_outpath = self.database / f"{self.cfg['context_df']}.pkl"
+
+        # dataframe saves
+        self.composite_dataframe = self.database / f"{self.cfg['composite_df']}.pkl"
+        self.dna_profile_df = self.database / f"{self.cfg['dna_profile']}.pkl"
+        self.prot_profile_df = self.database / f"{self.cfg['prot_profile']}.pkl"
+
+        self.dna_pwm_profile_df = self.database / f"{self.cfg['dna_pwm_profile']}.pkl"
+        self.aa_pwm_profile_df = self.database / f"{self.cfg['aa_pwm_profile']}.pkl"
 
         # final dataframe for model training
-        self.final_df_path = Path('database') / f"{self.cfg['full_variant_df']}.pkl"
+        self.final_df_path = self.database / f"{self.cfg['full_variant_df']}.pkl"
 
 
         # model storage
         self.model_name = model_name
         self.model_storage = Path(self.cfg['model_folder'])
         self.model_path = self.model_storage / f"{self.model_name}"
+
 
        # create full path in one go with parents=True
         self.model_path.mkdir(parents=True, exist_ok=True)
@@ -90,11 +106,13 @@ class KeyStone:
         # 378862 rows of GRCh38 assembly gene varant data rows
         binary_clinical_df.to_csv(self.naivefile_df_outpath, index=False)
 
+
     def decompress_genome(self):
         with gzip.open(self.genome_gz, 'rb') as f_in, open(self.genome_decomp, 'wb') as f_out:
             print("decompressing")
             f_out.write(f_in.read())
             print(f"decompressed to {self.genome_decomp}")
+
 
     def context_dataframe(self):
         """
@@ -182,14 +200,31 @@ class KeyStone:
     # concatenate the DNA and Prot dataframe for each variant type
     # One dataframe for short variants and one for structural variants
     # Now we can train our models
-    def generate_fp(self):
+
+    # [1] - extract most probable protein sequences for downstream biochemical analysis and motif scanning
+    def protein_extraction(self):
+        with open(self.context_df_outpath, 'rb') as infile:
+            df = pkl.load(infile)
+            # load up default dataframe, pass it to composite prot to extract all the protein sequences first
+
+        with CompositeProt() as prot_module:
+            composite_df = prot_module.gen_AAseqs(df)
+
+        with open(self.composite_dataframe, 'wb') as outfile:
+            pkl.dump(composite_df, outfile)
+
+        print(composite_df.columns)
+        return True
+
+    # [2]
+    def generate_dna_profile(self):
         """
         Builds dataframe for variants -> DNA and AA profiles at once
         This process will take a fairly long time - I am trying to implement multicore optimizations,
         it's just a little tricky rn with the class variables holding some crucial elements
-        :return: Dataframe in database//VARIANT_df.csv
+        :return: Dataframe in database//VARIANT_df.pkl
         """
-        with open(self.context_df_outpath, 'rb') as infile:
+        with open(self.composite_dataframe, 'rb') as infile:
             df = pkl.load(infile)
 
         # note: modules support multiprocessing context managers
@@ -197,42 +232,125 @@ class KeyStone:
         # 12:35 to 13:20, dropped from 1.5 hours
         with CompositeDNA() as dna_module:
             dna_df = dna_module.gen_DNAfp_dataframe(df)
+        dna_df.index = df.index  # ensure alignment for downstream processing
+
+        with open(self.dna_profile_df, 'wb') as outfile:
+            pkl.dump(dna_df, outfile)
+        return True
+
+    # [3]
+    def generate_prot_profile(self):
+        with open(self.composite_dataframe, 'rb') as infile:
+            df = pkl.load(infile)
 
         # ==[Protein data]==
-        # 1.5 hours, dropped from a prospective 7-9 hours
+        # 30 minutes
         with CompositeProt() as prot_module:
             prot_df = prot_module.gen_AAfp_dataframe(df)
+        prot_df.index = df.index
+
+        with open(self.prot_profile_df, 'wb') as outfile:
+            pkl.dump(prot_df, outfile)
+        return True
+
+    # [4]
+    def generate_dnapwm_profile(self):
+        with open(self.composite_dataframe, 'rb') as infile:
+            df = pkl.load(infile)
+
+        # managed to optimize processing time from 3-4 hours to 20-30 minutes with 4x the motifs...
+        with DNAMatrix() as dna_pwm_module:
+            dna_pwm_df = dna_pwm_module.gen_DNAPWM_dataframe(df)
+        dna_pwm_df.index = df.index  # ensure index alignment
+
+        with open(self.dna_pwm_profile_df, 'wb') as outfile:
+            pkl.dump(dna_pwm_df, outfile)
+        return True
 
 
+    def generate_aapwm_profile(self):
+        with open(self.composite_dataframe, 'rb') as infile:
+            df = pkl.load(infile)
 
-        # [[Save DataFrame]]
-        # ensure alignment - in case something goes wrong with one of them
-        dna_df.index = df.index
-        prot_df.index= df.index
+        # managed to optimize processing time from 3-4 hours to 20-30 minutes with 4x the motifs...
+        with ProtMatrix() as aa_pwm_module:
+            aa_pwm_df = aa_pwm_module.gen_AAPWM_dataframe(df)
+        aa_pwm_df.index = df.index  # ensure index alignment
 
-        variant_final_df = pd.concat([dna_df, prot_df], axis=1)
-        with open(self.final_df_path, 'wb') as outfile:
-            pkl.dump(variant_final_df, outfile)
+        with open(self.aa_pwm_profile_df, 'wb') as outfile:
+            pkl.dump(aa_pwm_df, outfile)
+        return True
+
+
+    def get_final_dataframe(self):
+        filepaths = [self.dna_profile_df, self.prot_profile_df, self.dna_pwm_profile_df, self.aa_pwm_profile_df]
+
+        for p in filepaths:
+            path = Path(p)
+            if not path.exists():
+                raise FileNotFoundError(f"File {path} not created yet")
+            if path.stat().st_size == 0:
+                raise ValueError(f"File {path} is empty")
+
+        # Remember this order for LookingGlass and ReGen
+        # dna, prot, dnapwm, protpwm
+        dfs = [
+            pd.read_pickle(self.dna_profile_df),
+            pd.read_pickle(self.prot_profile_df),
+            pd.read_pickle(self.dna_pwm_profile_df),
+            pd.read_pickle(self.aa_pwm_profile_df),
+        ]
+
+        variant_final_df = pd.concat(dfs, axis=1)
+        variant_final_df.to_pickle(self.final_df_path)
         return True
 
 
     def train_models(self):
+        """
+        Call on this to train the models
+        1) Feature optimization -> not possible yet still need to tweak DataSift before using it in this pipeline
+        2) Hyperparameter optimization
+        3) Model saving
+        """
+
         # load data and train models
         with open(self.final_df_path, 'rb') as infile:
             variant_dataframe = pkl.load(infile)
+
+        useless_columns = ['ref_protein_list', 'alt_protein_list',
+                           'non_ambiguous_ref', 'non_ambiguous_alt',
+                           'ref_protein_length', 'alt_protein_length']
+
+        variant_dataframe = variant_dataframe.drop(useless_columns, axis=1)
+
+        for label in variant_dataframe.columns:
+            print(label)
 
         self.optimized_model(variant_dataframe)
 
 
     def optimized_model(self, df):
-        X = df.drop("ClinicalSignificance", axis=1)
-        y = df['ClinicalSignificance']
+        # from DataSift import DataSift
+        y_label = 'ClinicalSignificance'
+        df = df.loc[:, ~df.columns.duplicated()]
+
+        X = df.drop(y_label, axis=1)
+        y = df[y_label]
 
         X = X.apply(pd.to_numeric, errors= 'coerce')
 
         label_map = {'Benign': 0, 'Pathogenic': 1}
+
         y = y.map(label_map)
 
+        # Hopefully I figure out how to make this actually work well later
+        # refined_features = DataSift(XGBClassifier(),
+        #                             df,
+        #                             y_label,
+        #                             label_map).d_sift()
+
+        # X = X[refined_features]
 
         X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                             test_size = 0.2,
@@ -240,26 +358,37 @@ class KeyStone:
                                                             random_state=42)
 
         # == Hyperparameter Optimization ==
+        # tuner = optuna.samplers.TPESampler(n_startup_trials=50, seed=42)  # will learn from previous trials
+        # pruner = optuna.pruners.MedianPruner(n_startup_trials=30, n_warmup_steps=10)
+        #
         # class_counts = y.value_counts()
         # scale_pos_weight = class_counts[0] / class_counts[1]
-        # study = optuna.create_study(direction='maximize')
-        # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=100)
+        #
+        # study = optuna.create_study(direction='maximize',
+        #                             sampler = tuner,
+        #                             pruner = pruner)
+        #
+        # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=175)
         # best_params = study.best_params
 
-        # I did that already, took two hours
-
-        best_params = {'n_estimators': 1936, 'max_depth': 10, 'learning_rate': 0.041977875319094894,
-                       'subsample': 0.8691093047813849, 'colsample_bytree': 0.9973783186852718,
-                       'reg_alpha': 0.20907871533405323, 'reg_lambda': 1.6124970064334614,
-                       'gamma': 0.35865668074613577, 'scale_pos_weight': 1.8996291716997067}
+        best_params = {'n_estimators': 1674,
+                       'max_depth': 10,
+                       'learning_rate': 0.034561112430304776,
+                       'subsample': 0.9212141915845736,
+                       'colsample_bytree': 0.6016405698933265,
+                       'colsample_bylevel': 0.9329109895929816,
+                       'reg_alpha': 0.7001202050122113,
+                       'reg_lambda': 3.1671750288760134,
+                       'gamma': 1.0033930419124446,
+                       'min_child_weight': 9,
+                       'scale_pos_weight': 1.6075244983571118}
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
 
     def evaluate_save(self, parameters, X_train, y_train, X_test, y_test):
-        import os
-        from sklearn.model_selection import StratifiedKFold
-        from sklearn.metrics import roc_auc_score, precision_recall_curve, auc, f1_score
-        print(f"Optimal Hyperparameters: {parameters}")
+
+        content = ""
+        content += f"Optimal Hyperparameters: {parameters}\n"
 
         strat_fold = StratifiedKFold(n_splits = 5, shuffle=True)
 
@@ -289,8 +418,8 @@ class KeyStone:
             roc_scores.append(roc_auc_score(y_val, y_pred_proba))
             pr_scores.append(auc(recall, precision))
 
-        print(f"Cross Validation Results: Mean ROC AUC: {np.mean(roc_scores):.4f}, Mean PR AUC: {np.mean(pr_scores):.4f}")
-        print(f"Mean FNs: {np.mean(fn_counts):.2f}, Mean FPs: {np.mean(fp_counts):.2f}")
+        content += f"Cross Validation Results: Mean ROC AUC: {np.mean(roc_scores):.4f}, Mean PR AUC: {np.mean(pr_scores):.4f}\n"
+        content += f"Mean FNs: {np.mean(fn_counts):.2f}, Mean FPs: {np.mean(fp_counts):.2f}\n"
 
         # Train on full data and evaluate on test set
         model.fit(X_train, y_train)
@@ -313,22 +442,33 @@ class KeyStone:
         y_pred_optimal = (y_pred_proba >= optimal_threshold).astype(int)
 
 
-        print(f"ROC AUC: {roc_auc:.4f}")
-        print(f"Precision-Recall AUC: {pr_auc:.4f}")
-        print(f"Pathogenic F1-Score: {pathogenic_f1:.4f}")
-        print(f"Optimal threshold for pathogenic detection: {optimal_threshold:.3f}")
+        content += f"ROC AUC: {roc_auc:.4f}\n"
+        content += f"Precision-Recall AUC: {pr_auc:.4f}\n"
+        content += f"Pathogenic F1-Score: {pathogenic_f1:.4f}\n"
+        content += f"Optimal threshold for pathogenic detection: {optimal_threshold:.3f}\n"
 
-        print("Performance with optimal threshold:")
-        print(classification_report(y_test, y_pred_optimal))
+        content += "Performance with optimal threshold:\n"
+        content += classification_report(y_test, y_pred_optimal)
 
         cm = confusion_matrix(y_test, y_pred_optimal, labels=[0, 1])
-        print("Confusion Matrix:")
-        print(cm)
+        content += "Confusion Matrix:\n"
+        content += str(cm)
+        content += "\n----------------------------------------------\n"
 
-        display = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Benign', 'Pathogenic'])
-        display.plot()
+        feature_importances = model.feature_importances_
+        featimp_df = pd.DataFrame({
+            "Feature": X_train.columns,
+            "Importance": feature_importances,
+        })
+
+        featimp_df = featimp_df.sort_values(by="Importance", ascending=True)
+
+        for _, row in featimp_df.iterrows():
+            content += f"{row['Feature']}: {row['Importance']:.4f}\n"
 
         savepath = self.model_path / f"{self.model_name}.pkl"
+        statpath = self.model_path / f"{self.model_name}_stats.txt"
+        statpath.write_text(content)
         if os.path.exists(savepath):
             print(f"Model {self.model_name} already exists. Skipping save to prevent overwrite")
         else:
@@ -345,19 +485,24 @@ class KeyStone:
             'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
             'subsample': trial.suggest_float('subsample', 0.5, 1.0),
             'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
-            'reg_alpha': trial.suggest_float('reg_alpha', 0, 1.0),
-            'reg_lambda': trial.suggest_float('reg_lambda', 0, 2.0),
+            'colsample_bylevel': trial.suggest_float('colsample_bylevel', 0.5, 1.0),
+            'reg_alpha': trial.suggest_float('reg_alpha', 0, 5.0),
+            'reg_lambda': trial.suggest_float('reg_lambda', 1.0, 10.0),
             'gamma': trial.suggest_float('gamma', 0, 5),
-            'scale_pos_weight': trial.suggest_float('scale_pos_weight', 0.5 * scale_pos_weight, 2 * scale_pos_weight),
+            'min_child_weight': trial.suggest_int('min_child_weight', 1, 20),
+            'scale_pos_weight': trial.suggest_float('scale_pos_weight',
+                                                    0.8 * scale_pos_weight,
+                                                    2.0 * scale_pos_weight),
             'objective': 'binary:logistic',
-            'eval_metric': 'mlogloss',
+            'tree_method': 'hist',
+            'eval_metric': 'aucpr',
             'n_jobs': -1,
             'random_state': 42
         }
 
         model = XGBClassifier(**params)
-
-        scores = cross_val_score(model, X_train, y_train, cv=5, scoring='average_precision')
+        f1_scorer = make_scorer(f1_score, pos_label=1)
+        scores = cross_val_score(model, X_train, y_train, cv=5, scoring=f1_scorer)
         return scores.mean()
 
 
@@ -366,10 +511,4 @@ class KeyStone:
             df = pkl.load(infile)
 
         print(df.head(5).to_string())
-
-
-
-
-
-
 

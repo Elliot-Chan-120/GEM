@@ -316,7 +316,7 @@ Benign % increase: 72.31379747390747
 FINAL VARIANTS:
 --------------------------------------------------
 Score: 91.5849506855011 | Length: 3 bp
-Benign % increase: 88.2948637008667   
-Sequence: 
+Benign % increase: 88.2948637008667
+Sequence:
     ATC
 

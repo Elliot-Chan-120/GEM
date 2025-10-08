@@ -11,7 +11,9 @@ import sklearn
 # file imports - will need more thorough error handling later on
 from a02_1_CompositeDNA_Toolkit import CompositeDNA
 from a02_2_CompositeProt_Toolkit import CompositeProt
-from a03_LookingGlass import LookingGlass
+from a02_3_DNAMatrix_Toolkit import *
+from a02_4_ProtMatrix_Toolkit import *
+from a03_LookingGlass import *
 from b00_bio_library import ALL_AA_COMBINATIONS
 from b01_utility import custom_parse
 
@@ -24,7 +26,6 @@ class ReGen:
             self.cfg = yaml.safe_load(outfile)
 
         self.target_gene = ""
-
 
         self.root = Path(__file__).parent.resolve()
         self.input_folder = Path('ReGen_input')
@@ -55,6 +56,8 @@ class ReGen:
         # Load analysis modules
         self.DNA_module = CompositeDNA()
         self.Prot_module = CompositeProt()
+        self.DNApwm_module = DNAMatrix()
+        self.AApwm_module = ProtMatrix()
 
         # Load possible modifications
         self.nt_database = ALL_AA_COMBINATIONS
@@ -157,6 +160,8 @@ class ReGen:
         # Exit analysis modules
         self.DNA_module.terminate_pool()
         self.Prot_module.terminate_pool()
+        self.DNApwm_module.terminate_pool()
+        self.AApwm_module.terminate_pool()
 
         print("Saving data to textfile...")
         self.save_data(initial_score.item(), initial_data.iloc[0], last_variants, max_benign_batch_genes, threshold_genes)
@@ -232,9 +237,22 @@ class ReGen:
     # helper functions
     def mutation_fp(self, variant_dataframe):
         df = variant_dataframe.copy()
-        dna_df = self.DNA_module.gen_DNAfp_dataframe(df)
-        prot_df = self.Prot_module.gen_AAfp_dataframe(df)
-        return pd.concat([dna_df, prot_df], axis=1)
+        composite_dataframe = self.Prot_module.gen_AAseqs(df)
+
+        dna_df = self.DNA_module.gen_DNAfp_dataframe(composite_dataframe)
+        prot_df = self.Prot_module.gen_AAfp_dataframe(composite_dataframe)
+        dnapwm_df = self.DNApwm_module.gen_DNAPWM_dataframe(composite_dataframe)
+        aapwm_df = self.AApwm_module.gen_AAPWM_dataframe(composite_dataframe)
+
+        variant_df = pd.concat([dna_df, prot_df, dnapwm_df, aapwm_df], axis=1)
+
+        useless_columns = ['ref_protein_list', 'alt_protein_list',
+                           'non_ambiguous_ref', 'non_ambiguous_alt',
+                           'ref_protein_length', 'alt_protein_length']
+
+        variant_df = variant_df.drop(useless_columns, axis=1)
+
+        return variant_df
 
     def benign_score(self, muta_fingerprint):
         predictions = self.model.predict_proba(muta_fingerprint.drop(['ClinicalSignificance'], axis=1))[:, 0]
@@ -374,6 +392,16 @@ class ReGen:
         :return:
         """
         pass
+
+
+    def gene_map(self):
+        """
+        Outputs linear gene maps showing what elements and properties changed
+        :return:
+        """
+        pass
+
+
 
 
 

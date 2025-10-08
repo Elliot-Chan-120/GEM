@@ -4,6 +4,10 @@
 
 model_folder: 'model_folder'
 database_folder: 'database'
+datacore_folder: 'datacore'
+pwm_folder: 'pwm_database'
+dna_motifs: 'DNA_motifs'
+aa_motifs: 'AA_motifs'
 gene_databank: 'gene_databank'
 screen_predictions: 'Screen_results'
 
@@ -16,6 +20,20 @@ GRCh38_fna: GCF_000001405.29_GRCh38.p14_genomic.fna
 # USER GENERATED FILES FOR ML TRAINING
 ref_alt_df: REF_ALT_df
 context_df: CONTEXT_ref_alt_df
+
+# Composite df - passed on to composite classes and pwm profiler for downstream analysis
+composite_df: CompositeDF
+
+# DNA dataframe
+dna_profile: DNA_profile_df
+
+# Prot dataframe
+prot_profile: PROT_profile_df
+
+# PWM dataframes
+dna_pwm_profile: DNAPWM_profile_df
+aa_pwm_profile: AAPWM_profile_df
+
 full_variant_df: VARIANT_df
 
 
@@ -63,6 +81,11 @@ min_repeats: 5  # minimum times a subseq is repeated for its region to be consid
 protein_substitution_matrix: "blosum62.mat"
 minimum_protein_length: 10
 protein_gap_penalty: -8
+
+# [Motif Search Settings]
+motif_search_radius: 150  # reasonable length
+dna_cluster_distance: 50  # base pairs
+aa_cluster_distance: 30   # amino acids
 
 
 # ==================================

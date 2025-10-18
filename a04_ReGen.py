@@ -4,7 +4,7 @@ import pickle as pkl
 import pandas as pd
 import numpy as np
 import re
-import random
+import os
 
 import sklearn
 
@@ -53,14 +53,21 @@ class ReGen:
         with open(model_path, 'rb') as model:
             self.model = pkl.load(model)
 
+        max_cores = max(1, (multiprocessing.cpu_count() - 2) // 5)
+
         # Load analysis modules
-        self.DNA_module = CompositeDNA()
-        self.Prot_module = CompositeProt()
-        self.DNApwm_module = DNAMatrix()
-        self.AApwm_module = ProtMatrix()
+        self.DNA_module = CompositeDNA(max_cores)
+        self.Prot_module = CompositeProt(max_cores)
+        self.DNApwm_module = DNAMatrix(max_cores)
+        self.AApwm_module = ProtMatrix(max_cores)
 
         # Load possible modifications
         self.nt_database = ALL_AA_COMBINATIONS
+
+        print(f"System cores: {multiprocessing.cpu_count()}")
+        print(f"Allocated cores per pool: {max_cores}")
+        print(f"DNA pool workers: {self.DNA_module._pool._processes}")
+        print(f"Total workers across all pools: {max_cores * 4}")
 
     def repair(self):
         """

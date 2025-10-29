@@ -49,6 +49,8 @@ class KeyStone:
         self.dna_pwm_profile_df = self.database / f"{self.cfg['dna_pwm_profile']}.pkl"
         self.aa_pwm_profile_df = self.database / f"{self.cfg['aa_pwm_profile']}.pkl"
 
+        self.hmm_profile_df = self.database / f"{self.cfg['hmm_profile']}.pkl"
+
         # final dataframe for model training
         self.final_df_path = self.database / f"{self.cfg['full_variant_df']}.pkl"
 
@@ -174,8 +176,8 @@ class KeyStone:
 
             new_df.append({
                 "Chromosome": chromosome,
-                "ReferenceAlleleVCF": ref_allele,
-                "AlternateAlleleVCF": alt_allele,
+                "ReferenceAlleleVCF": ref_allele.upper(),
+                "AlternateAlleleVCF": alt_allele.upper(),
                 "Flank_1": flank1.upper(),
                 "Flank_2": flank2.upper(),
                 "ClinicalSignificance": clinsig
@@ -282,8 +284,24 @@ class KeyStone:
         return True
 
 
+    def generate_hmm_profile(self):
+        with open(self.composite_dataframe, 'rb') as infile:
+            df = pkl.load(infile)
+
+        with CompositeDNA() as dna_pwm_module:
+            hmm_df = dna_pwm_module.gen_HMM_dataframe(df)
+        hmm_df.index = df.index
+
+        with open(self.hmm_profile_df, 'wb') as outfile:
+            pkl.dump(hmm_df, outfile)
+
+        return True
+
+
     def get_final_dataframe(self):
-        filepaths = [self.dna_profile_df, self.prot_profile_df, self.dna_pwm_profile_df, self.aa_pwm_profile_df]
+        filepaths = [self.dna_profile_df, self.prot_profile_df,
+                     self.dna_pwm_profile_df, self.aa_pwm_profile_df,
+                     self.hmm_profile_df]
 
         for p in filepaths:
             path = Path(p)
@@ -299,6 +317,7 @@ class KeyStone:
             pd.read_pickle(self.prot_profile_df),
             pd.read_pickle(self.dna_pwm_profile_df),
             pd.read_pickle(self.aa_pwm_profile_df),
+            pd.read_pickle(self.hmm_profile_df)
         ]
 
         variant_final_df = pd.concat(dfs, axis=1)
@@ -324,9 +343,6 @@ class KeyStone:
 
         variant_dataframe = variant_dataframe.drop(useless_columns, axis=1)
 
-        for label in variant_dataframe.columns:
-            print(label)
-
         self.optimized_model(variant_dataframe)
 
 
@@ -337,6 +353,9 @@ class KeyStone:
 
         X = df.drop(y_label, axis=1)
         y = df[y_label]
+
+        for label in X.columns:
+            print(label)
 
         X = X.apply(pd.to_numeric, errors= 'coerce')
 

@@ -10,22 +10,20 @@ import pandas as pd
 from collections import Counter
 import re
 from tqdm import tqdm
-import random
 
 # multiprocessing
 import multiprocessing
 from multiprocessing import Pool
 
 # initialize biological structure libraries
-from b00_bio_library import COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON
-
-
+from b00_bio_library import COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON, AMBIGUOUS, IUPAC_CODES
 
 global_config = {}
 
 def config_init(config, complements, nn_free_energy,
                 gene_densities, stops,
-                poly_tracts, intron):
+                poly_tracts, intron,
+                iupac_codes, ambiguous):
     """
     Create global variables for each worker process
     :param config:
@@ -35,10 +33,12 @@ def config_init(config, complements, nn_free_energy,
     :param stops:
     :param poly_tracts:
     :param intron:
+    :param iupac_codes:
+    :param ambiguous:
     :return:
     """
     # These become GLOBAL variables in each worker process - check multiprocessing pool functions in class
-    global global_config, COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON
+    global global_config, COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON, IUPAC_CODES, AMBIGUOUS
 
 
     global_config = config
@@ -48,6 +48,8 @@ def config_init(config, complements, nn_free_energy,
     STOPS = stops
     POLY_TRACTS = poly_tracts
     INTRON = intron
+    IUPAC_CODES = iupac_codes
+    AMBIGUOUS = ambiguous
 
 
 class CompositeDNA:
@@ -75,6 +77,118 @@ class CompositeDNA:
             # buffer region size
             self.structural_buffer = self.cfg['DNA_buffer_region']
 
+            # hmm search window
+            self.hmm_window = self.cfg['hmm_window']
+
+            self.initial_probs = {
+                "3UTR": 0.075,
+                "5UTR": 0.075,
+                "CDS": 0.015,
+                "Exon": 0.03,
+                "Intergenic": 0.67,
+                "Intron": 0.27,
+            }
+
+            self.emission_probs = {
+                "3UTR": {
+                    "A": 0.250000,
+                    "C": 0.250000,
+                    "G": 0.250000,
+                    "T": 0.250000,
+                },
+                "5UTR": {
+                    "A": 0.250000,
+                    "C": 0.250000,
+                    "G": 0.250000,
+                    "T": 0.250000,
+                },
+                "CDS": {
+                    "A": 0.268820,
+                    "C": 0.253455,
+                    "G": 0.258194,
+                    "T": 0.219532,
+                },
+                "Exon": {
+                    "A": 0.270445,
+                    "C": 0.233545,
+                    "G": 0.237919,
+                    "T": 0.258092,
+                },
+                "Intergenic": {
+                    "A": 0.298139,
+                    "C": 0.200534,
+                    "G": 0.201782,
+                    "T": 0.299545,
+                },
+                "Intron": {
+                    "A": 0.280442,
+                    "C": 0.200074,
+                    "G": 0.209608,
+                    "T": 0.309875,
+                },
+            }
+
+            self.transition_probs = {
+                "3UTR": {
+                    "3UTR": 0.166667,
+                    "5UTR": 0.166667,
+                    "CDS": 0.166667,
+                    "Exon": 0.166667,
+                    "Intergenic": 0.166667,
+                    "Intron": 0.166667,
+                },
+                "5UTR": {
+                    "3UTR": 0.166667,
+                    "5UTR": 0.166667,
+                    "CDS": 0.166667,
+                    "Exon": 0.166667,
+                    "Intergenic": 0.166667,
+                    "Intron": 0.166667,
+                },
+                "CDS": {
+                    "3UTR": 0.000000,
+                    "5UTR": 0.000000,
+                    "CDS": 0.142494,
+                    "Exon": 0.000000,
+                    "Intergenic": 0.000000,
+                    "Intron": 0.857506,
+                },
+                "Exon": {
+                    "3UTR": 0.000000,
+                    "5UTR": 0.000000,
+                    "CDS": 0.836724,
+                    "Exon": 0.000000,
+                    "Intergenic": 0.000000,
+                    "Intron": 0.163276,
+                },
+                "Intergenic": {
+                    "3UTR": 0.166667,
+                    "5UTR": 0.166667,
+                    "CDS": 0.166667,
+                    "Exon": 0.166667,
+                    "Intergenic": 0.166667,
+                    "Intron": 0.166667,
+                },
+                "Intron": {
+                    "3UTR": 0.000000,
+                    "5UTR": 0.000000,
+                    "CDS": 0.000000,
+                    "Exon": 1.000000,
+                    "Intergenic": 0.000000,
+                    "Intron": 0.000000,
+                },
+            }
+
+            self.states = ['3UTR', '5UTR', 'CDS', 'Exon', 'Intergenic', 'Intron']
+
+            # initialize starting transition state dictionary for future tracking
+            self.transstate_dict = {}
+            for state in self.states:
+                for next_state in self.states:
+                    if state != next_state:
+                        self.transstate_dict.update({f"{state}_to_{next_state}": 0})
+
+
 
         # create config for downstream multiproc
         self.config = {
@@ -86,7 +200,15 @@ class CompositeDNA:
             'max_repeat_length': self.max_repeat_length,
             'min_repeats': self.min_repeats,
             'structural_buffer': self.structural_buffer,
-            'sub_matrix': self.sub_matrix
+            'sub_matrix': self.sub_matrix,
+
+            # HMM parameters
+            'hmm_window': self.hmm_window,
+            'init_probs': self.initial_probs,
+            'emit_probs': self.emission_probs,
+            'trans_probs': self.transition_probs,
+            'states': self.states,
+            'transstate_dict': self.transstate_dict,
         }
 
         # define number of cores
@@ -109,7 +231,8 @@ class CompositeDNA:
                 initializer=config_init,
                 initargs=(self.config, COMPLEMENTS,
                           NN_FREE_ENERGY, GENE_DENSITIES, STOPS,
-                          POLY_TRACTS, INTRON)
+                          POLY_TRACTS, INTRON,
+                          IUPAC_CODES, AMBIGUOUS)
             )
 
     def terminate_pool(self):
@@ -932,4 +1055,182 @@ class CompositeDNA:
         if result is not None:
             intron_count = result
         return intron_count
+
+
+# [[[WORK IN PROGRESS]]]
+    def gen_HMM_dataframe(self, dataframe):
+        fingerprint_rows = [
+            (row['ReferenceAlleleVCF'], row['AlternateAlleleVCF'],
+             row['Flank_1'], row['Flank_2'])
+            for _, row in dataframe.iterrows()
+        ]
+
+        fingerprint_rows = list(tqdm(
+            CompositeDNA._pool.imap(self.hmm_wrapper, fingerprint_rows),
+            total=len(fingerprint_rows),
+            desc="[Extracting broad domain changes]"
+        ))
+
+        hmm_df = pd.DataFrame(fingerprint_rows)
+        hmm_df = pd.concat([dataframe.reset_index(drop=True), hmm_df], axis=1)
+
+        hmm_df = hmm_df.drop(['ReferenceAlleleVCF', 'AlternateAlleleVCF', 'Flank_1', 'Flank_2'], axis=1)
+
+        return hmm_df
+
+    def hmm_wrapper(self, fp_row):
+        ref_allele, alt_allele, flank_1, flank_2 = fp_row
+        hmm_window_range = global_config['hmm_window']
+        result_dict = {}
+
+        # multi-scaled results
+        for results in self.multi_scale_viterbi(ref_allele, alt_allele, flank_1, flank_2, hmm_window_range):
+            # ok remember that ref is sequence 1, alt is sequence 2
+            result_dict.update(results)
+
+        return result_dict
+
+    def multi_scale_viterbi(self, ref_vcf, alt_vcf, flank1, flank2, hmm_window_range):
+        result_list = []
+
+        scales = [1, 3, 0.5]  # standard, long, close range analysis of path composition changes
+        for scale in scales:
+            scaled_flank1 = flank1[int(hmm_window_range * scale):]
+            scaled_flank2 = flank2[:int(hmm_window_range * scale)]
+            scaled_ref = scaled_flank1 + ref_vcf + scaled_flank2
+            scaled_alt = scaled_flank1 + alt_vcf + scaled_flank2
+
+            results = self.viterbi_delta(scaled_ref, scaled_alt)
+
+            scaled_results = {f"{scale}_{key}": value for key, value in results.items()}
+
+            result_list.append(scaled_results)
+
+        return result_list  # remember to unpack this list in wrapper
+
+
+    def viterbi_delta(self, seq1, seq2):
+        base_dict = {state_orig: 0 for state_orig in global_config['states']}
+        vtbi_prob1, vtbi_seq1 = self.viterbi(seq1)
+        vtbi_prob2, vtbi_seq2 = self.viterbi(seq2)
+
+        # establish base profile
+        for char in vtbi_seq1:
+            base_dict[char] += float(1 / len(vtbi_seq1))
+
+        # track changes
+        for char in vtbi_seq2:
+            base_dict[char] -= float(1 / len(vtbi_seq2))
+
+
+        # transition state tracking - okay debug this
+        base_dict.update(self.transstate_delta(vtbi_seq1, vtbi_seq2))
+
+        # v-prob tracking
+        base_dict.update({'V_prob_delta': float(vtbi_prob2 - vtbi_prob1)})
+
+        return base_dict
+
+
+    @staticmethod
+    def get_init_prob(state):
+        if state in global_config['states']:
+            prob = global_config['init_probs'][state]
+            return np.log(prob) if prob > 0 else -np.inf
+        else:
+            return -np.inf
+
+    @staticmethod
+    def get_emission_prob(state, symbol):
+        if state in global_config['states']:
+            if symbol in AMBIGUOUS:
+                prob = np.mean([global_config['emit_probs'][state][char] for char in IUPAC_CODES[symbol]])
+                return np.log(prob) if prob > 0 else -np.inf
+            else:
+                prob = global_config['emit_probs'][state][symbol]
+                return np.log(prob) if prob > 0 else -np.inf
+        else:
+            return -np.inf
+
+    @staticmethod
+    def get_transition_prob(state_orig, state_dest):
+        if state_orig in global_config['states'] and state_dest in global_config['states']:
+            prob = global_config['trans_probs'][state_orig][state_dest]
+            return np.log(prob) if prob > 0 else -np.inf
+        else:
+            return -np.inf
+
+    def viterbi(self, sequence):
+        # to-do: log normalize the scores and fix possible division by 0
+        # also: input setting to establish domain search window, maybe 1000 bps minimum is a little excessive
+        seq_len = len(sequence)
+        if seq_len == 0:
+            return -np.inf, []
+
+        viterbi = {}
+        state_path = {}
+
+        # normalize with log probabilities
+        for state in global_config['states']:
+            init_prob = self.get_init_prob(state)
+            emit_prob = self.get_emission_prob(state, sequence[0])
+
+            viterbi[state] = init_prob + emit_prob
+            state_path[state] = [state]
+
+        for t in range(1, seq_len):
+            new_state_path = {}
+            new_path = {}
+            viterbi_tmp = {}
+
+            for state_dest in global_config['states']:
+                intermediate_probs = []
+
+                for state_orig in global_config['states']:
+                    prob = viterbi[state_orig] + self.get_transition_prob(state_orig, state_dest)
+                    intermediate_probs.append((prob, state_orig))
+
+                (max_prob, max_state) = max(intermediate_probs)
+
+                prob = self.get_emission_prob(state_dest, sequence[t]) + max_prob
+                viterbi_tmp[state_dest] = prob
+                new_state_path[state_dest] = max_state
+                new_path[state_dest] = state_path[max_state] + [state_dest]
+
+            viterbi = viterbi_tmp
+            state_path = new_path
+
+        max_state = None
+        max_prob = -np.inf
+
+        for state in global_config['states']:
+            if viterbi[state] > max_prob:
+                max_prob = viterbi[state]
+                max_state = state
+
+        return max_prob, state_path[max_state]
+
+    def transstate_delta(self, v_seq1, v_seq2):
+        ts_delta = {}
+        ts_statecopy = global_config['transstate_dict']
+
+        ts_dict1 = self.transstate_composition(v_seq1, ts_statecopy)
+        ts_dict2 = self.transstate_composition(v_seq2, ts_statecopy)
+
+        for key in ts_statecopy.keys():
+            ts_delta.update({key: int(ts_dict1[key] - ts_dict2[key])})
+
+        return ts_delta
+
+    @staticmethod
+    def transstate_composition(seq, state_dict):
+        copy = state_dict
+
+        # build dictionary based off of all possible state changes and track differences between them
+        for idx in range(len(seq)-1):
+            current_state = seq[idx]
+            next_state = seq[idx+1]
+            if next_state != current_state:
+                copy[f"{current_state}_to_{next_state}"] += 1
+        return copy
 

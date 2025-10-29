@@ -2,7 +2,7 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-model_name = "ReGen_v4"
+model_name = "HMM_augment"
 
 # all functions with a name guard need to be called alone
 
@@ -63,6 +63,19 @@ def ks_dnamotif_profile(model = model_name):
         print(f"PWM Fingerprint Generation Failed: {e}")
         raise
 
+
+def ks_domain_profile(model = model_name):
+    # 2.5 hours and it's not useful at all right now
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success  = test.generate_hmm_profile()
+            if success:
+                print("[HMM-domain Profile Completed]")
+    except Exception as e:
+        print(f"HMM-domain Fingerprint Generation Failed: {e}")
+        raise
+
 def ks_aamotif_profile(model = model_name):
     # 30 minutes
     test = KeyStone(model)
@@ -106,5 +119,5 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
 
 
 # [ Command ]
-Repair_Gene()
+keystone_model_training()
 

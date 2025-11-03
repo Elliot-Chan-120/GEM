@@ -2,8 +2,7 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-model_name = "HMM_augment"
-
+model_name = "HMM_DataSift"
 # all functions with a name guard need to be called alone
 
 # [1] sourced data extraction and processing
@@ -119,5 +118,5 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
 
 
 # [ Command ]
-keystone_model_training()
+ks_domain_profile()
 

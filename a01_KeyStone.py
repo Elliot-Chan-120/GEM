@@ -347,7 +347,7 @@ class KeyStone:
 
 
     def optimized_model(self, df):
-        # from DataSift import DataSift
+        from DataSift import DataSift
         y_label = 'ClinicalSignificance'
         df = df.loc[:, ~df.columns.duplicated()]
 
@@ -364,12 +364,13 @@ class KeyStone:
         y = y.map(label_map)
 
         # Hopefully I figure out how to make this actually work well later
-        # refined_features = DataSift(XGBClassifier(),
-        #                             df,
-        #                             y_label,
-        #                             label_map).d_sift()
+        refined_features = DataSift(XGBClassifier(),
+                                    df,
+                                    y_label,
+                                    label_map,
+                                    variance_threshold=0.05).d_sift()
 
-        # X = X[refined_features]
+        X = X[refined_features]
 
         X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                             test_size = 0.2,
@@ -460,7 +461,6 @@ class KeyStone:
         # Apply optimal threshold
         y_pred_optimal = (y_pred_proba >= optimal_threshold).astype(int)
 
-
         content += f"ROC AUC: {roc_auc:.4f}\n"
         content += f"Precision-Recall AUC: {pr_auc:.4f}\n"
         content += f"Pathogenic F1-Score: {pathogenic_f1:.4f}\n"
@@ -488,6 +488,14 @@ class KeyStone:
         savepath = self.model_path / f"{self.model_name}.pkl"
         statpath = self.model_path / f"{self.model_name}_stats.txt"
         statpath.write_text(content)
+
+        # save settings
+        settings = ""
+        for setting in X_train.columns:
+            settings += f"{setting}\n"
+        settingpath = self.model_path / f"{self.model_name}_settings.txt"
+        settingpath.write_text(settings)
+
         if os.path.exists(savepath):
             print(f"Model {self.model_name} already exists. Skipping save to prevent overwrite")
         else:

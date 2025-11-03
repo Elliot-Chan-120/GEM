@@ -188,6 +188,8 @@ class CompositeDNA:
                     if state != next_state:
                         self.transstate_dict.update({f"{state}_to_{next_state}": 0})
 
+            self.domain_threshold = self.cfg['domain_threshold']
+
 
 
         # create config for downstream multiproc
@@ -209,6 +211,8 @@ class CompositeDNA:
             'trans_probs': self.transition_probs,
             'states': self.states,
             'transstate_dict': self.transstate_dict,
+
+            'domain_threshold': self.domain_threshold,
         }
 
         # define number of cores
@@ -996,7 +1000,7 @@ class CompositeDNA:
         # chose to use re.escape because of user-defined strings later on - may accidentally insert a character
         patterns = {
             # repeats previous group / token min number of times
-            kmer: re.compile(f'({re.escape(kmer)}){{{config['min_repeats']},}}')
+            kmer: re.compile(f"({re.escape(kmer)}){{{config['min_repeats']},}}")
             for kmer in candidates
         }
 
@@ -1111,8 +1115,8 @@ class CompositeDNA:
 
     def viterbi_delta(self, seq1, seq2):
         base_dict = {state_orig: 0 for state_orig in global_config['states']}
-        vtbi_prob1, vtbi_seq1 = self.viterbi(seq1)
-        vtbi_prob2, vtbi_seq2 = self.viterbi(seq2)
+        vtbi_prob1, vtbi_seq1 = self.opt_viterbi(seq1)
+        vtbi_prob2, vtbi_seq2 = self.opt_viterbi(seq2)
 
         # establish base profile
         for char in vtbi_seq1:
@@ -1129,8 +1133,61 @@ class CompositeDNA:
         # v-prob tracking
         base_dict.update({'V_prob_delta': float(vtbi_prob2 - vtbi_prob1)})
 
+        # domain coherence
+        base_dict.update(self.domain_stats_delta(vtbi_seq1, vtbi_seq2))
+
         return base_dict
 
+    def opt_viterbi(self, sequence):
+        # to-do: log normalize the scores and fix possible division by 0
+        # also: input setting to establish domain search window, maybe 1000 bps minimum is a little excessive
+        seq_len = len(sequence)
+        if seq_len == 0:
+            return -np.inf, []
+
+        viterbi = {}
+        backptr = [{} for _ in range(seq_len)]
+
+        # initialize - position 0
+        # normalize with log probabilities
+        for state in global_config['states']:
+            init_prob = self.get_init_prob(state)
+            emit_prob = self.get_emission_prob(state, sequence[0])
+
+            viterbi[state] = init_prob + emit_prob
+
+        for t in range(1, seq_len):
+            viterbi_previous = viterbi
+            viterbi = {}
+
+            for state_dest in global_config['states']:
+                max_prob = -np.inf
+                max_state = None
+
+                for state_orig in global_config['states']:
+                    prob = (viterbi_previous[state_orig] +
+                            self.get_transition_prob(state_dest, state_orig))
+
+                    if prob > max_prob:
+                        max_prob = prob
+                        max_state = state_orig
+
+                # stores the probability score and the original state
+                viterbi[state_dest] = (max_prob +
+                                       self.get_emission_prob(state_dest, sequence[t]))
+                backptr[t][state_dest] = max_state
+
+        # traceback
+        max_state = max(viterbi.items(), key=lambda x: x[1])[0]
+        max_prob = viterbi[max_state]
+
+        # reconstruct path
+        path = [max_state]
+        for t in range(seq_len - 1, 0, -1):  # iterate backwards and figure out which state you came from
+            max_state = backptr[t][max_state]
+            path.insert(0, max_state)
+
+        return max_prob, path
 
     @staticmethod
     def get_init_prob(state):
@@ -1160,56 +1217,6 @@ class CompositeDNA:
         else:
             return -np.inf
 
-    def viterbi(self, sequence):
-        # to-do: log normalize the scores and fix possible division by 0
-        # also: input setting to establish domain search window, maybe 1000 bps minimum is a little excessive
-        seq_len = len(sequence)
-        if seq_len == 0:
-            return -np.inf, []
-
-        viterbi = {}
-        state_path = {}
-
-        # normalize with log probabilities
-        for state in global_config['states']:
-            init_prob = self.get_init_prob(state)
-            emit_prob = self.get_emission_prob(state, sequence[0])
-
-            viterbi[state] = init_prob + emit_prob
-            state_path[state] = [state]
-
-        for t in range(1, seq_len):
-            new_state_path = {}
-            new_path = {}
-            viterbi_tmp = {}
-
-            for state_dest in global_config['states']:
-                intermediate_probs = []
-
-                for state_orig in global_config['states']:
-                    prob = viterbi[state_orig] + self.get_transition_prob(state_orig, state_dest)
-                    intermediate_probs.append((prob, state_orig))
-
-                (max_prob, max_state) = max(intermediate_probs)
-
-                prob = self.get_emission_prob(state_dest, sequence[t]) + max_prob
-                viterbi_tmp[state_dest] = prob
-                new_state_path[state_dest] = max_state
-                new_path[state_dest] = state_path[max_state] + [state_dest]
-
-            viterbi = viterbi_tmp
-            state_path = new_path
-
-        max_state = None
-        max_prob = -np.inf
-
-        for state in global_config['states']:
-            if viterbi[state] > max_prob:
-                max_prob = viterbi[state]
-                max_state = state
-
-        return max_prob, state_path[max_state]
-
     def transstate_delta(self, v_seq1, v_seq2):
         ts_delta = {}
         ts_statecopy = global_config['transstate_dict']
@@ -1224,6 +1231,12 @@ class CompositeDNA:
 
     @staticmethod
     def transstate_composition(seq, state_dict):
+        """
+        transitional state change composition tracker
+        :param seq:
+        :param state_dict: initialized at class instantiation
+        :return:
+        """
         copy = state_dict
 
         # build dictionary based off of all possible state changes and track differences between them
@@ -1234,3 +1247,184 @@ class CompositeDNA:
                 copy[f"{current_state}_to_{next_state}"] += 1
         return copy
 
+
+    def domain_stats_delta(self, state_seq1, state_seq2):
+        """
+        Track domain disruption magnitudes across sequences
+        :param state_seq1:
+        :param state_seq2:
+        :return:
+        """
+        domain_dict = {
+            'Exon': ['coding', 'transcribable', 'processing'],
+            'Intron': ['noncoding', 'regulatory'],
+            'Intergenic': ['noncoding'],
+            '3UTR': ['noncoding', 'regulatory', 'transcribable', 'processing'],
+            '5UTR': ['noncoding', 'regulatory', 'transcribable', 'processing'],
+            'CDS': ['coding', 'transcribable']
+        }
+
+        result_dict = {}
+
+        # domain composition data retrieval
+        doco_vseq1 = self.domain_composition(state_seq1, domain_dict)
+        doco_vseq2 = self.domain_composition(state_seq2, domain_dict)
+
+        domain_types = ['coding', 'noncoding', 'transcribable', 'processing', 'regulatory']
+
+        # data processing
+        for domain_type in domain_types:
+            # first get domain lists
+            domain_list1 = doco_vseq1[f"{domain_type}"]  # will be list of (start_pos, length) tuples
+            domain_list2 = doco_vseq2[f"{domain_type}"]
+
+            # run count delta
+            result_dict[f"{domain_type}_domain_count"] = len(domain_list1) - len(domain_list2)
+
+            # domain coherence score - ok something is wrong with this specific function
+            result_dict[f"{domain_type}_domain_coherence_score"] = self.domain_coherence(domain_list1, domain_list2,
+                                                                                         len(state_seq1), len(state_seq2))
+
+            # domain fragmentation
+            result_dict[f"{domain_type}_domain_fragmentation_delta"] = len(domain_list2) - len(domain_list1)
+
+            # average domain length
+            avg_len1 = np.mean([length for _, length in domain_list1]) if domain_list1 else 0
+            avg_len2 = np.mean([length for _, length in domain_list2]) if domain_list2 else 0
+            result_dict[f"{domain_type}_avg_length_delta"] = avg_len2 - avg_len1
+
+            # domain_coverage
+            result_dict[f"{domain_type}_coverage_delta"] = self.domain_coverage(domain_list1, domain_list2,
+                                                                                len(state_seq1), len(state_seq2))
+
+            # domain stability
+            result_dict[f"{domain_type}_stability_delta"] = self.domain_stability(domain_list1, domain_list2)
+
+            # longest domain run
+            max_len1 = max([length for _, length in domain_list1]) if domain_list1 else 0
+            max_len2 = max([length for _, length in domain_list2]) if domain_list2 else 0
+            result_dict[f"{domain_type}_max_run_delta"] = max_len2 - max_len1
+
+        return result_dict
+
+    @staticmethod
+    def domain_composition(state_seq, domain_dict):
+        domain_results = {
+            'coding': [],
+            'noncoding': [],
+            'regulatory': [],
+            'transcribable': [],
+            'processing': [],
+        }
+
+        # will store run lengths
+        run_dict = {key: {'start': None, 'length': 0} for key in domain_results.keys()}
+
+        # ok logic here -> iterate through positions, and for each domain at that position, check if the next is the identical and add a run around else make it 0
+        for idx in range(len(state_seq) - 1):
+            c_state = state_seq[idx]
+            c_domains = domain_dict[c_state]          # current state and domains
+
+            # determine what domains are present
+            if idx <= len(state_seq) - 1:
+                n_state = state_seq[idx + 1]
+                n_domains = domain_dict[n_state]      # next state and domains
+            else:
+                return domain_results  # end of seq
+
+            # update domain type and if a run isn't there, start one
+            for domain_type in domain_results.keys():
+                is_current = domain_type in c_domains
+                is_next = domain_type in n_domains
+
+                if is_current:
+                    if run_dict[domain_type]['start'] is None:
+                        run_dict[domain_type]['start'] = idx
+                        run_dict[domain_type]['length'] = 1
+                    else:
+                        run_dict[domain_type]['length'] += 1
+
+                    # end the run if domain is not in next pos or at sequence end
+                    if not is_next:
+                        # only record the run if it meets the minimum length threshold
+                        if run_dict[domain_type]['length'] >= global_config['domain_threshold']:
+                            domain_results[domain_type].append(
+                                (run_dict[domain_type]['start'],
+                                 run_dict[domain_type]['length'])
+                            )
+                            run_dict[domain_type] = {'start': None, 'length': 0}
+
+        return domain_results
+
+    @staticmethod
+    def domain_coherence(domain_list1, domain_list2, seq1_len, seq2_len):
+        # domain coherence scores
+        domain_coherence_score = 0.0
+        set1 = set(domain_list1)
+        set2 = set(domain_list2)
+
+        domains_added = list(set2 - set1)
+        domains_lost = list(set1 - set2)
+        domains_preserved = list(set1 & set2)
+
+        # penalize lost and new domains - fragmentation / incorrect states
+        for add_tuple in domains_added:
+            domain_coherence_score -= add_tuple[1] / seq2_len
+
+        for lost_tuple in domains_lost:
+            domain_coherence_score -= lost_tuple[1] / seq1_len
+
+        # reward preserved domains
+        for pres_tuple in domains_preserved:
+            domain_coherence_score += pres_tuple[1] / np.mean(seq1_len + seq2_len)
+
+        return domain_coherence_score
+
+    @staticmethod
+    def domain_coverage(domain_list1, domain_list2, length1, length2):
+        total_len1 = sum(length for _, length in domain_list1)
+        total_len2 = sum(length for _, length in domain_list2)
+        coverage1 = total_len1 / length1 if length1 > 0 else 0
+        coverage2 = total_len2 / length2 if length2 > 0 else 0
+
+        return coverage2 - coverage1
+
+    @staticmethod
+    def domain_stability(domain_list1, domain_list2):
+        if len(domain_list1) > 1:
+            lengths1 = [length for _, length in domain_list1]
+            cv1 = np.std(lengths1) / np.mean(lengths1) if np.mean(lengths1) > 0 else 0
+        else:
+            cv1 = 0
+
+        if len(domain_list2) > 1:
+            lengths2 = [length for _, length in domain_list2]
+            cv2 = np.std(lengths2) / np.mean(lengths2) if np.mean(lengths2) > 0 else 0
+        else:
+            cv2 = 0
+
+        return cv1 - cv2
+
+
+
+# below is a failed function im keeping it in case this actually becomes usable down the line
+    @staticmethod
+    def run_check(rState_seq, curr_domain, domain_dict):
+        """
+        given current domain, run and scan for a continuous domain run until a different domain is hit
+        \nreturn the length of the domain in question
+        """
+        # sanity check we actually got a valid run
+        print("made it to the helper")
+        if curr_domain in domain_dict[rState_seq[0]]:
+            run_l = 0
+            for idx in range(
+                    len(rState_seq) - 1):  # start at 1 because we've already established the first two are identical domains
+                next_domain = domain_dict[rState_seq[idx + 1]]
+                if curr_domain in next_domain:
+                    run_l += 1
+                else:
+                    return run_l
+            return run_l
+        else:
+            raise ValueError("Domain sanity check failed")

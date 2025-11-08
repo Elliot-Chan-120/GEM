@@ -12,6 +12,7 @@ from a02_2_CompositeProt_Toolkit import CompositeProt
 from a02_3_DNAMatrix_Toolkit import *
 from a02_4_ProtMatrix_Toolkit import *
 from b01_utility import custom_parse
+from DataSift import *
 
 
 class LookingGlass:
@@ -29,12 +30,19 @@ class LookingGlass:
         self.input_file = Path(self.cfg['gene_databank']) / self.gene_filename
 
         # model loading
+        self.model_name = ml_model_name
         model_path = Path(self.cfg['model_folder']) / ml_model_name / f"{ml_model_name}.pkl"
         with open(model_path, 'rb') as model:
             self.model = pkl.load(model)
 
+        self.Sift = None
+
 
     def DNA_fingerprint(self):
+        control = SiftControl()
+        control.LoadConfig(self.model_name)
+        self.Sift = control.LoadSift()
+
         dataframe = custom_parse(self.input_file)
         dataframe = pd.DataFrame(dataframe)
 
@@ -44,7 +52,6 @@ class LookingGlass:
         with CompositeProt() as prot_module:
             composite_df = prot_module.gen_AAseqs(dataframe)
             prot_df = prot_module.gen_AAfp_dataframe(composite_df)
-
 
         # ==[DNA data]==
         with CompositeDNA() as dna_module:
@@ -82,6 +89,9 @@ class LookingGlass:
         mutation_fingerprint = mutation_fingerprint.loc[:, ~mutation_fingerprint.columns.duplicated()]
         names = mutation_fingerprint.Name
         mutation_fingerprint = mutation_fingerprint.drop(['ClinicalSignificance', 'Name'], axis=1)
+
+        # apply data sift
+        mutation_fingerprint = mutation_fingerprint[self.Sift]
 
         results = self.model.predict_proba(mutation_fingerprint)
         predictions = (results[:, 1] >= self.cfg['optimal_threshold']).astype(int)

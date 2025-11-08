@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import re
 import os
+import random
 
 import sklearn
 
@@ -16,6 +17,7 @@ from a02_4_ProtMatrix_Toolkit import *
 from a03_LookingGlass import *
 from b00_bio_library import ALL_AA_COMBINATIONS
 from b01_utility import custom_parse
+from DataSift import *
 
 
 
@@ -68,6 +70,10 @@ class ReGen:
         print(f"Allocated cores per pool: {max_cores}")
         print(f"DNA pool workers: {self.DNA_module._pool._processes}")
         print(f"Total workers across all pools: {max_cores * 4}")
+
+        control = SiftControl()
+        control.LoadConfig(self.model_name)
+        self.Sift = control.LoadSift()
 
     def repair(self):
         """
@@ -264,7 +270,14 @@ class ReGen:
         return variant_df
 
     def benign_score(self, muta_fingerprint):
-        predictions = self.model.predict_proba(muta_fingerprint.drop(['ClinicalSignificance'], axis=1))[:, 0]
+        # take out Y and duplicated columns
+        variant_df = muta_fingerprint.drop(['ClinicalSignificance'], axis=1)
+        variant_df = variant_df.loc[:, ~variant_df.columns.duplicated()]
+
+        # apply sift
+        variant_df = variant_df[self.Sift]
+
+        predictions = self.model.predict_proba(variant_df)[:, 0]
         return pd.Series(predictions)
 
 

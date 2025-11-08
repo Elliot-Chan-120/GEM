@@ -243,6 +243,7 @@ class ReGen:
 
     # helper functions
     def mutation_fp(self, variant_dataframe):
+        # maybe turn this general thing into a helper function?
         df = variant_dataframe.copy()
         composite_dataframe = self.Prot_module.gen_AAseqs(df)
 
@@ -250,8 +251,9 @@ class ReGen:
         prot_df = self.Prot_module.gen_AAfp_dataframe(composite_dataframe)
         dnapwm_df = self.DNApwm_module.gen_DNAPWM_dataframe(composite_dataframe)
         aapwm_df = self.AApwm_module.gen_AAPWM_dataframe(composite_dataframe)
+        hmm_df = self.DNA_module.gen_HMM_dataframe(composite_dataframe)
 
-        variant_df = pd.concat([dna_df, prot_df, dnapwm_df, aapwm_df], axis=1)
+        variant_df = pd.concat([dna_df, prot_df, dnapwm_df, aapwm_df, hmm_df], axis=1)
 
         useless_columns = ['ref_protein_list', 'alt_protein_list',
                            'non_ambiguous_ref', 'non_ambiguous_alt',

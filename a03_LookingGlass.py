@@ -49,6 +49,7 @@ class LookingGlass:
         # ==[DNA data]==
         with CompositeDNA() as dna_module:
             dna_df = dna_module.gen_DNAfp_dataframe(composite_df)
+            hmm_df = dna_module.gen_HMM_dataframe(composite_df)
 
         with DNAMatrix() as dnapwm_module:
             dnapwm_df = dnapwm_module.gen_DNAPWM_dataframe(composite_df)
@@ -62,8 +63,9 @@ class LookingGlass:
         prot_df.index = dataframe.index
         dnapwm_df.index = dataframe.index
         aapwm_df.index = dataframe.index
+        hmm_df.index = dataframe.index
 
-        variant_df = pd.concat([dna_df, prot_df, dnapwm_df, aapwm_df], axis=1)
+        variant_df = pd.concat([dna_df, prot_df, dnapwm_df, aapwm_df, hmm_df], axis=1)
 
         useless_columns = ['ref_protein_list', 'alt_protein_list',
                            'non_ambiguous_ref', 'non_ambiguous_alt',

@@ -6,6 +6,7 @@ from a02_1_CompositeDNA_Toolkit import *
 from a02_2_CompositeProt_Toolkit import *
 from a02_3_DNAMatrix_Toolkit import *
 from a02_4_ProtMatrix_Toolkit import *
+from DataSift import *
 
 import optuna
 from xgboost import XGBClassifier
@@ -61,7 +62,7 @@ class KeyStone:
         self.model_path = self.model_storage / f"{self.model_name}"
 
 
-       # create full path in one go with parents=True
+        # create full path in one go with parents=True
         self.model_path.mkdir(parents=True, exist_ok=True)
 
         # dataframe settings
@@ -328,10 +329,11 @@ class KeyStone:
     def train_models(self):
         """
         Call on this to train the models
-        1) Feature optimization -> not possible yet still need to tweak DataSift before using it in this pipeline
+        1) Feature optimization
         2) Hyperparameter optimization
         3) Model saving
         """
+        print(f"Model Training Start...")
 
         # load data and train models
         with open(self.final_df_path, 'rb') as infile:
@@ -347,37 +349,46 @@ class KeyStone:
 
 
     def optimized_model(self, df):
-        from DataSift import DataSift
+        print(f"Model Optimization Initiated")
         y_label = 'ClinicalSignificance'
         df = df.loc[:, ~df.columns.duplicated()]
 
         X = df.drop(y_label, axis=1)
         y = df[y_label]
 
-        for label in X.columns:
-            print(label)
-
         X = X.apply(pd.to_numeric, errors= 'coerce')
+
+        for column in X.columns:
+            print(column)
 
         label_map = {'Benign': 0, 'Pathogenic': 1}
 
         y = y.map(label_map)
 
-        # Hopefully I figure out how to make this actually work well later
-        refined_features = DataSift(XGBClassifier(),
-                                    df,
-                                    y_label,
-                                    label_map,
-                                    variance_threshold=0.05).d_sift()
+        # [FEATURE OPTIMIZATION - MY BABY WORKS!]
+        feature_optimizer = DataSift(classifier_name=self.model_name,
+                                    classifier=XGBClassifier(),
+                                    dataframe=df,
+                                    y_label=y_label,
+                                    label_map=label_map,
+                                    variance_space=[0.0, 0.3],
+                                    optimize_variance=True,
+                                    max_runs=20)
 
-        X = X[refined_features]
+        feature_optimizer.Data_Sift()
+
+        control = SiftControl()
+        control.LoadConfig(self.model_name)
+        refined_feature_list = control.LoadSift()
+
+        X = X[refined_feature_list]
 
         X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                             test_size = 0.2,
                                                             stratify=y,
                                                             random_state=42)
 
-        # == Hyperparameter Optimization ==
+        # [[== Hyperparameter Optimization ==]]
         # tuner = optuna.samplers.TPESampler(n_startup_trials=50, seed=42)  # will learn from previous trials
         # pruner = optuna.pruners.MedianPruner(n_startup_trials=30, n_warmup_steps=10)
         #
@@ -406,6 +417,7 @@ class KeyStone:
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
 
     def evaluate_save(self, parameters, X_train, y_train, X_test, y_test):
+        print("Evaluating Model...")
 
         content = ""
         content += f"Optimal Hyperparameters: {parameters}\n"
@@ -442,6 +454,7 @@ class KeyStone:
         content += f"Mean FNs: {np.mean(fn_counts):.2f}, Mean FPs: {np.mean(fp_counts):.2f}\n"
 
         # Train on full data and evaluate on test set
+        print(f"Full Data Run...")
         model.fit(X_train, y_train)
         y_pred_proba = model.predict_proba(X_test)[:, 1]
 
@@ -489,13 +502,7 @@ class KeyStone:
         statpath = self.model_path / f"{self.model_name}_stats.txt"
         statpath.write_text(content)
 
-        # save settings
-        settings = ""
-        for setting in X_train.columns:
-            settings += f"{setting}\n"
-        settingpath = self.model_path / f"{self.model_name}_settings.txt"
-        settingpath.write_text(settings)
-
+        print(f"Model Optimization Complete! Saving...")
         if os.path.exists(savepath):
             print(f"Model {self.model_name} already exists. Skipping save to prevent overwrite")
         else:

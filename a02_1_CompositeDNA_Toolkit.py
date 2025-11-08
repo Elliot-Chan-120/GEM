@@ -188,8 +188,6 @@ class CompositeDNA:
                     if state != next_state:
                         self.transstate_dict.update({f"{state}_to_{next_state}": 0})
 
-            self.domain_threshold = self.cfg['domain_threshold']
-
 
 
         # create config for downstream multiproc
@@ -211,8 +209,6 @@ class CompositeDNA:
             'trans_probs': self.transition_probs,
             'states': self.states,
             'transstate_dict': self.transstate_dict,
-
-            'domain_threshold': self.domain_threshold,
         }
 
         # define number of cores
@@ -1097,26 +1093,28 @@ class CompositeDNA:
     def multi_scale_viterbi(self, ref_vcf, alt_vcf, flank1, flank2, hmm_window_range):
         result_list = []
 
-        scales = [1, 3, 0.5]  # standard, long, close range analysis of path composition changes
+        scales = [1, 2, 0.5]  # standard, long, close range analysis of path composition changes
         for scale in scales:
-            scaled_flank1 = flank1[int(hmm_window_range * scale):]
-            scaled_flank2 = flank2[:int(hmm_window_range * scale)]
+            scaled_window = int(hmm_window_range * scale)
+
+            scaled_flank1 = flank1[-scaled_window:]
+
+            scaled_flank2 = flank2[:scaled_window]
             scaled_ref = scaled_flank1 + ref_vcf + scaled_flank2
             scaled_alt = scaled_flank1 + alt_vcf + scaled_flank2
 
-            results = self.viterbi_delta(scaled_ref, scaled_alt)
+            results = self.viterbi_delta(scaled_ref, scaled_alt, len(scaled_flank1))
 
-            scaled_results = {f"{scale}_{key}": value for key, value in results.items()}
-
+            scaled_results = {f"{scale}xScale_{key}": value for key, value in results.items()}
             result_list.append(scaled_results)
 
         return result_list  # remember to unpack this list in wrapper
 
 
-    def viterbi_delta(self, seq1, seq2):
+    def viterbi_delta(self, scaled_ref, scaled_alt, flank_length):
         base_dict = {state_orig: 0 for state_orig in global_config['states']}
-        vtbi_prob1, vtbi_seq1 = self.opt_viterbi(seq1)
-        vtbi_prob2, vtbi_seq2 = self.opt_viterbi(seq2)
+        vtbi_prob1, vtbi_seq1 = self.opt_viterbi(scaled_ref)
+        vtbi_prob2, vtbi_seq2 = self.opt_viterbi(scaled_alt)
 
         # establish base profile
         for char in vtbi_seq1:
@@ -1133,8 +1131,9 @@ class CompositeDNA:
         # v-prob tracking
         base_dict.update({'V_prob_delta': float(vtbi_prob2 - vtbi_prob1)})
 
-        # domain coherence
-        base_dict.update(self.domain_stats_delta(vtbi_seq1, vtbi_seq2))
+        # state determination + boundary composite scores
+        base_dict.update(self.state_stats(vtbi_seq1, vtbi_seq2, flank_length))
+
 
         return base_dict
 
@@ -1237,7 +1236,7 @@ class CompositeDNA:
         :param state_dict: initialized at class instantiation
         :return:
         """
-        copy = state_dict
+        copy = state_dict.copy()
 
         # build dictionary based off of all possible state changes and track differences between them
         for idx in range(len(seq)-1):
@@ -1247,14 +1246,83 @@ class CompositeDNA:
                 copy[f"{current_state}_to_{next_state}"] += 1
         return copy
 
+    # future work -> variant level analysis
+    # variant level barely changes the genomic context -> so maybe focus effort into close range
+    # track state prob. changes at the variant pos.
+    # track what domain the mutation occurred, composition of its neighbours
 
-    def domain_stats_delta(self, state_seq1, state_seq2):
-        """
-        Track domain disruption magnitudes across sequences
-        :param state_seq1:
-        :param state_seq2:
-        :return:
-        """
+    def state_stats(self, state_seq1, state_seq2, flank_length):
+        stat_dict = {}
+
+        seq1_states, rnb1, rnb2 = self.state_identifier(state_seq1, flank_length)
+        seq2_states, anb1, anb2  = self.state_identifier(state_seq2, flank_length)
+
+        # get statistics for core variant sequences - no flag because we'll fill this in during comparison
+        rv_stat_analysis = self.state_analysis(seq1_states, flag='')
+        rv_subg_analysis = self.subgroup_analysis(seq1_states, flag= '')
+        av_stat_analysis = self.state_analysis(seq2_states, flag='')
+        av_subg_analysis = self.subgroup_analysis(seq2_states, flag='')
+
+        # mutation-resulted stat shifts
+        stat_dict.update(self.compare_dicts(rv_stat_analysis, av_stat_analysis, flag='varState_delta'))
+        stat_dict.update(self.compare_dicts(rv_subg_analysis, av_subg_analysis, flag='varSubgr_delta'))
+
+        # statistics about neighbouring sequences - maybe this will be a little difficult to navigate
+        stat_dict.update(self.state_analysis(rnb1, flag='RefNB1'))
+        stat_dict.update(self.subgroup_analysis(rnb1, flag='RefNB1'))
+
+        stat_dict.update(self.state_analysis(rnb2, flag='RefNB2'))
+        stat_dict.update(self.subgroup_analysis(rnb2, flag='RefNB2'))
+
+        # boundary composite delta
+        stat_dict.update(self.boundary_composite_delta(seq1_states, seq2_states, rnb1, rnb2))
+
+        return stat_dict
+
+
+    @staticmethod
+    def state_identifier(state_seq, len_flank):
+        variant_length = len(state_seq) - (2 * len_flank)
+        variant_start = len_flank
+        variant_end = len_flank + variant_length
+
+        variant_states = state_seq[variant_start: variant_end]
+
+        neighbour_window = len_flank // 2
+
+        neighbour1 = state_seq[variant_start - neighbour_window: variant_start]
+        neighbour2 = state_seq[variant_end:variant_end + neighbour_window]
+
+        return variant_states, neighbour1, neighbour2
+
+    @staticmethod
+    def state_analysis(state_seq, flag, pseudocount = 1):
+        possible_states = {state: 0 for state in global_config['states']}
+
+        # record all states in mutation zone
+        for state in state_seq:
+            possible_states[state] += 1
+
+        # name items according to the flag given - variant, neighbour1, neighbour2
+        result_dict = {}
+        result_dict.update({f"{flag}_{state}_rawc": result for state, result in possible_states.items()})
+        seqlen = max(len(state_seq), 1)
+        result_dict.update({f"{flag}_{state}_log2": float(np.log2((result+pseudocount)/seqlen)) for state, result in possible_states.items()})
+        result_dict.update({f"{flag}_{state}_pctg": (result/seqlen) for state, result in possible_states.items()})
+
+        return result_dict
+
+
+    @staticmethod
+    def subgroup_analysis(state_seq, flag, pseudocount = 1):
+        subgroup_results = {
+            'coding': 0,
+            'noncoding': 0,
+            'regulatory': 0,
+            'transcribable': 0,
+            'processing': 0
+        }
+
         domain_dict = {
             'Exon': ['coding', 'transcribable', 'processing'],
             'Intron': ['noncoding', 'regulatory'],
@@ -1264,167 +1332,71 @@ class CompositeDNA:
             'CDS': ['coding', 'transcribable']
         }
 
+        for group in state_seq:
+            for subgroup in domain_dict[group]:
+                subgroup_results[subgroup] += 1
+
         result_dict = {}
-
-        # domain composition data retrieval
-        doco_vseq1 = self.domain_composition(state_seq1, domain_dict)
-        doco_vseq2 = self.domain_composition(state_seq2, domain_dict)
-
-        domain_types = ['coding', 'noncoding', 'transcribable', 'processing', 'regulatory']
-
-        # data processing
-        for domain_type in domain_types:
-            # first get domain lists
-            domain_list1 = doco_vseq1[f"{domain_type}"]  # will be list of (start_pos, length) tuples
-            domain_list2 = doco_vseq2[f"{domain_type}"]
-
-            # run count delta
-            result_dict[f"{domain_type}_domain_count"] = len(domain_list1) - len(domain_list2)
-
-            # domain coherence score - ok something is wrong with this specific function
-            result_dict[f"{domain_type}_domain_coherence_score"] = self.domain_coherence(domain_list1, domain_list2,
-                                                                                         len(state_seq1), len(state_seq2))
-
-            # domain fragmentation
-            result_dict[f"{domain_type}_domain_fragmentation_delta"] = len(domain_list2) - len(domain_list1)
-
-            # average domain length
-            avg_len1 = np.mean([length for _, length in domain_list1]) if domain_list1 else 0
-            avg_len2 = np.mean([length for _, length in domain_list2]) if domain_list2 else 0
-            result_dict[f"{domain_type}_avg_length_delta"] = avg_len2 - avg_len1
-
-            # domain_coverage
-            result_dict[f"{domain_type}_coverage_delta"] = self.domain_coverage(domain_list1, domain_list2,
-                                                                                len(state_seq1), len(state_seq2))
-
-            # domain stability
-            result_dict[f"{domain_type}_stability_delta"] = self.domain_stability(domain_list1, domain_list2)
-
-            # longest domain run
-            max_len1 = max([length for _, length in domain_list1]) if domain_list1 else 0
-            max_len2 = max([length for _, length in domain_list2]) if domain_list2 else 0
-            result_dict[f"{domain_type}_max_run_delta"] = max_len2 - max_len1
+        result_dict.update({f"{flag}_{group}_rawc": result for group, result in subgroup_results.items()})  # raw count
+        seqlen = max(len(state_seq), 1)
+        result_dict.update({f"{flag}_{group}_log2": float(np.log2((result+pseudocount)/seqlen)) for group, result in subgroup_results.items()})
+        result_dict.update({f"{flag}_{group}_pctg": (result / seqlen) for group, result in subgroup_results.items()})
 
         return result_dict
 
     @staticmethod
-    def domain_composition(state_seq, domain_dict):
-        domain_results = {
-            'coding': [],
-            'noncoding': [],
-            'regulatory': [],
-            'transcribable': [],
-            'processing': [],
-        }
+    def compare_dicts(dict1, dict2, flag):
+        return {f"{flag}_{key}": dict1[key] - dict2[key] for key in dict1 if key in dict2}
 
-        # will store run lengths
-        run_dict = {key: {'start': None, 'length': 0} for key in domain_results.keys()}
-
-        # ok logic here -> iterate through positions, and for each domain at that position, check if the next is the identical and add a run around else make it 0
-        for idx in range(len(state_seq) - 1):
-            c_state = state_seq[idx]
-            c_domains = domain_dict[c_state]          # current state and domains
-
-            # determine what domains are present
-            if idx <= len(state_seq) - 1:
-                n_state = state_seq[idx + 1]
-                n_domains = domain_dict[n_state]      # next state and domains
-            else:
-                return domain_results  # end of seq
-
-            # update domain type and if a run isn't there, start one
-            for domain_type in domain_results.keys():
-                is_current = domain_type in c_domains
-                is_next = domain_type in n_domains
-
-                if is_current:
-                    if run_dict[domain_type]['start'] is None:
-                        run_dict[domain_type]['start'] = idx
-                        run_dict[domain_type]['length'] = 1
-                    else:
-                        run_dict[domain_type]['length'] += 1
-
-                    # end the run if domain is not in next pos or at sequence end
-                    if not is_next:
-                        # only record the run if it meets the minimum length threshold
-                        if run_dict[domain_type]['length'] >= global_config['domain_threshold']:
-                            domain_results[domain_type].append(
-                                (run_dict[domain_type]['start'],
-                                 run_dict[domain_type]['length'])
-                            )
-                            run_dict[domain_type] = {'start': None, 'length': 0}
-
-        return domain_results
-
-    @staticmethod
-    def domain_coherence(domain_list1, domain_list2, seq1_len, seq2_len):
-        # domain coherence scores
-        domain_coherence_score = 0.0
-        set1 = set(domain_list1)
-        set2 = set(domain_list2)
-
-        domains_added = list(set2 - set1)
-        domains_lost = list(set1 - set2)
-        domains_preserved = list(set1 & set2)
-
-        # penalize lost and new domains - fragmentation / incorrect states
-        for add_tuple in domains_added:
-            domain_coherence_score -= add_tuple[1] / seq2_len
-
-        for lost_tuple in domains_lost:
-            domain_coherence_score -= lost_tuple[1] / seq1_len
-
-        # reward preserved domains
-        for pres_tuple in domains_preserved:
-            domain_coherence_score += pres_tuple[1] / np.mean(seq1_len + seq2_len)
-
-        return domain_coherence_score
-
-    @staticmethod
-    def domain_coverage(domain_list1, domain_list2, length1, length2):
-        total_len1 = sum(length for _, length in domain_list1)
-        total_len2 = sum(length for _, length in domain_list2)
-        coverage1 = total_len1 / length1 if length1 > 0 else 0
-        coverage2 = total_len2 / length2 if length2 > 0 else 0
-
-        return coverage2 - coverage1
-
-    @staticmethod
-    def domain_stability(domain_list1, domain_list2):
-        if len(domain_list1) > 1:
-            lengths1 = [length for _, length in domain_list1]
-            cv1 = np.std(lengths1) / np.mean(lengths1) if np.mean(lengths1) > 0 else 0
-        else:
-            cv1 = 0
-
-        if len(domain_list2) > 1:
-            lengths2 = [length for _, length in domain_list2]
-            cv2 = np.std(lengths2) / np.mean(lengths2) if np.mean(lengths2) > 0 else 0
-        else:
-            cv2 = 0
-
-        return cv1 - cv2
-
-
-
-# below is a failed function im keeping it in case this actually becomes usable down the line
-    @staticmethod
-    def run_check(rState_seq, curr_domain, domain_dict):
+    def boundary_composite_delta(self, ref_vcf_vtbi, alt_vcf_vtbi, f1_vtbi, f2_vtbi):
         """
-        given current domain, run and scan for a continuous domain run until a different domain is hit
-        \nreturn the length of the domain in question
+        Calculate composite score based on how close domain boundaries are to the mutation site
         """
-        # sanity check we actually got a valid run
-        print("made it to the helper")
-        if curr_domain in domain_dict[rState_seq[0]]:
-            run_l = 0
-            for idx in range(
-                    len(rState_seq) - 1):  # start at 1 because we've already established the first two are identical domains
-                next_domain = domain_dict[rState_seq[idx + 1]]
-                if curr_domain in next_domain:
-                    run_l += 1
-                else:
-                    return run_l
-            return run_l
-        else:
-            raise ValueError("Domain sanity check failed")
+        if len(f2_vtbi) != len(f1_vtbi):
+            raise ValueError("Flank Length Inconsistent")
+
+        flank_length = len(f1_vtbi)
+
+        # get coordinates
+        variant_start = flank_length
+        refvar_end = flank_length + len(ref_vcf_vtbi)
+        altvar_end = flank_length + len(alt_vcf_vtbi)
+
+        # reassemble full state sequences
+        ref_full = f1_vtbi + ref_vcf_vtbi + f2_vtbi
+        alt_full = f1_vtbi + alt_vcf_vtbi + f2_vtbi
+
+        # get boundaries
+        ref_boundaries = [idx for idx in range(len(ref_full) - 1) if ref_full[idx] != ref_full[idx + 1]]
+        alt_boundaries = [idx for idx in range(len(alt_full) - 1) if alt_full[idx] != alt_full[idx + 1]]
+
+        ref_composite = self.boundary_gaussian(ref_boundaries, variant_start, refvar_end, len(ref_vcf_vtbi))
+        alt_composite = self.boundary_gaussian(alt_boundaries, variant_start, altvar_end, len(alt_vcf_vtbi))
+
+        # get coordinates of both mutation zones - start and stop
+        # get coordinates of all domain boundaries
+        # gaussian decay for domain boundaries the closer it gets to mutation zone
+
+        return {"Boundary_Composite_delta": alt_composite - ref_composite}
+
+    def boundary_gaussian(self, idxs, var_start, var_end, sigma):
+        distances = self.distance_from_window(idxs, var_start, var_end)
+        weights = self.gaussian_eq(distances, sigma)
+
+        return sum(weights)
+
+    @staticmethod
+    def distance_from_window(idx_list, window_start, window_end):
+        idxs = np.array(idx_list)
+        dist = np.where(idxs < window_start,
+                        window_start - idxs,
+                        np.where(idxs > window_end, idxs - window_end, 0))
+
+        return dist.tolist()
+
+    @staticmethod
+    def gaussian_eq(distances, sigma):
+        distances = np.asarray(distances)
+        weights = np.exp(-(distances**2) / (2 * sigma**2))
+        weights[distances==0] = 1.0
+        return weights

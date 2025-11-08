@@ -2,7 +2,7 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-model_name = "HMM_DataSift"
+model_name = "Nov5"
 # all functions with a name guard need to be called alone
 
 # [1] sourced data extraction and processing
@@ -64,7 +64,7 @@ def ks_dnamotif_profile(model = model_name):
 
 
 def ks_domain_profile(model = model_name):
-    # 2.5 hours and it's not useful at all right now
+    # 1:50 hours
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
@@ -118,5 +118,4 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
 
 
 # [ Command ]
-ks_domain_profile()
-
+keystone_model_training()

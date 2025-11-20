@@ -13,7 +13,6 @@ from tqdm import tqdm
 
 # multiprocessing
 import multiprocessing
-from multiprocessing import Pool
 
 # initialize biological structure libraries
 from b00_bio_library import COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON, AMBIGUOUS, IUPAC_CODES
@@ -311,8 +310,14 @@ class CompositeDNA:
             'Chromosome_density']
 
         # mutation composite
-        fp['FI_Mutation_composite'] = (fp['Tandem_Duplications'] + fp['Hairpins'] + fp['Microsatellites'] +
-                                       fp['Poly_tracts'] + fp['SNVs'] + fp['Insertion_length'])
+        fp["FI_Mutation_composite"] = (
+            fp["Tandem_Duplications"]
+            + fp["Hairpins"]
+            + fp["Repeat_instability_score"]
+            + fp["Poly_tracts"]
+            + fp["SNVs"]
+            + fp["Insertion_length"]
+        )
 
         return fp
 
@@ -408,18 +413,23 @@ class CompositeDNA:
         # Duplications
         # Tandem Duplications
         # Microsatellites
+        tr_loss, tr_gain, tr_delta, tr_composite, repeat_instab_score = self.repeat_instab(ref_buffered, alt_buffered, ref_kmer_freqs, alt_kmer_freqs, config)
 
         flanked_fp = {
             # 1 - Mutations / structure changes
             'Tandem_Duplications': self.duplication_delta(ref_buffered, alt_buffered, config),
             'Hairpins': self.hairpin_count_delta(ref_buffered, alt_buffered),
-            'Microsatellites': self.microsatellite_delta(ref_buffered, alt_buffered, ref_kmer_freqs, alt_kmer_freqs, config),
+            'TR_Loss': tr_loss,
+            'TR_Gain': tr_gain,
+            'TR_Delta': tr_delta,
+            'TRepeat_Composite': tr_composite,
+            'Repeat_instability_score': repeat_instab_score,
 
             # 2 - start and stop codons gain / loss
             'Start_codons': self.start_delta(ref_buffered, alt_buffered),
             'Stop_codons': self.stop_delta(ref_buffered, alt_buffered),
 
-            # 3 - intron changes - oh my god i forgot to delete this BEFORE model training so now it has to stay until the next run. will fix this.
+            # 3 - intron changes
             'Introns': self.intron_delta(ref_buffered, alt_buffered),
 
             # 4 - transcription factor and instability motifs
@@ -427,10 +437,12 @@ class CompositeDNA:
         }
 
         # 2 Feature Interactions
-        flanked_fp['FI_Mutation_propensity'] = ((flanked_fp['Tandem_Duplications'] +
-                                                 flanked_fp['Hairpins'] +
-                                                 flanked_fp['Microsatellites'] +
-                                                 flanked_fp['Poly_tracts']))
+        flanked_fp["FI_Mutation_propensity"] = (
+            flanked_fp["Tandem_Duplications"]
+            + flanked_fp["Hairpins"]
+            + flanked_fp["Repeat_instability_score"]
+            + flanked_fp["Poly_tracts"]
+        )
         return flanked_fp
 
     # =====[[ALIGNMENT DATA]]=====
@@ -960,8 +972,8 @@ class CompositeDNA:
 
         return hairpin_count
 
-    # Microsatellites
-    def microsatellite_delta(self, br_original, br_mutation, glb_ori_kmer_freqs, glb_muta_kmer_freqs, config):
+    # Repeat Instability
+    def repeat_instab(self, br_original, br_mutation, glb_ori_kmer_freqs, glb_muta_kmer_freqs, config):
         """
         Global sequences - Needs kmer frequencies from kmer_stats
         :param br_original:
@@ -969,40 +981,74 @@ class CompositeDNA:
         :param glb_ori_kmer_freqs:
         :param glb_muta_kmer_freqs:
         :param config:
-        :return: # of microsatellites lost [0] and gained [1]
+        :return: # repeats_lost, repeats_gained, microsat_delta, composite, repeat_instab_score
         """
         if not glb_ori_kmer_freqs or not glb_muta_kmer_freqs:
-            return 0
-        else:
-            k_min, k_max = config['k_min'], config['k_max']
-            orig_candidates = [kmer for kmer, freq in glb_ori_kmer_freqs.items()
-                               if k_min <= len(kmer) < k_max and freq >= config['min_repeats']]
-            muta_candidates = [kmer for kmer, freq in glb_muta_kmer_freqs.items()
-                               if k_min <= len(kmer) < k_max and freq >= config['min_repeats']]
+            return 0, 0, 0, 0, 0
 
-            # call on helper functions to determine if any of the kmers belong to a microsatellite
-            orig_sats = self.tandem_repeat(orig_candidates, br_original, config)
-            muta_sats = self.tandem_repeat(muta_candidates, br_mutation, config)
+        k_min, k_max = config['k_min'], config['k_max']
+        orig_candidates = [kmer for kmer, freq in glb_ori_kmer_freqs.items()
+                           if k_min <= len(kmer) < k_max and freq >= config['min_repeats']]
 
-        return len(muta_sats) - len(orig_sats)
+        muta_candidates = [kmer for kmer, freq in glb_muta_kmer_freqs.items()
+                           if k_min <= len(kmer) < k_max and freq >= config['min_repeats']]
+
+        # call on helper functions to determine if any of the kmers belong to a microsatellite
+        orig_sats = self.tandem_repeat(orig_candidates, br_original, config)
+        muta_sats = self.tandem_repeat(muta_candidates, br_mutation, config)
+
+        # process both dictionaries
+        orig_trs = set(orig_sats.keys())
+        muta_trs = set(muta_sats.keys())
+        repeats_lost = orig_trs - muta_trs
+        repeats_gain = muta_trs - orig_trs
+        microsat_delta = len(muta_trs) - len(orig_trs)
+
+        composite = 0
+
+        for tr in repeats_lost:
+            composite += sum(orig_sats[tr])
+
+        for tr in repeats_gain:
+            composite += sum(muta_sats[tr])
+
+        shared_trs = orig_trs & muta_trs
+        for tr in shared_trs:
+            composite += sum(muta_sats[tr]) - sum(orig_sats[tr])
+
+        repeat_instab = len(repeats_lost) + len(repeats_gain) + microsat_delta + composite
+
+        # in case something goes wrong, uncomment this
+        # print(f"len_repeats_lost: {len(repeats_lost)}")
+        # print(f"len_repeats_gain: {len(repeats_gain)}")
+        # print(f"microsat_delta: {microsat_delta}")
+        # print(f"composite: {composite}")
+        # print(f"repeat_instab: {repeat_instab}")
+
+        return len(repeats_lost), len(repeats_gain), microsat_delta, composite, repeat_instab
 
     # helper function for microsatellite detection
     @staticmethod
     def tandem_repeat(candidates, sequence, config):
         """Figures out microsatellite regions"""
-        satellites = set()
 
         # this is saying for kmer 'x' occuring 'min_repeats'+ times, add it to patterns
         # chose to use re.escape because of user-defined strings later on - may accidentally insert a character
+
         patterns = {
             # repeats previous group / token min number of times
             kmer: re.compile(f"({re.escape(kmer)}){{{config['min_repeats']},}}")
             for kmer in candidates
         }
 
+        satellites = {}
         for kmer, pattern in patterns.items():
-            if pattern.search(sequence):
-                satellites.add(kmer)
+            occurrences = list(re.finditer(pattern, sequence)) # makes the next line easier to read
+            if occurrences:
+                satellites.update({kmer: [len(item.group()) for item in occurrences]})
+
+        # so after all of this satellites should look like:
+        # {"CGGGA": [20, 21, 39, 80]}
 
         return satellites
 

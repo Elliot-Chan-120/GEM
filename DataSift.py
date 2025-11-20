@@ -372,6 +372,7 @@ class SiftControl:
             return True
 
     def LoadSift(self):
+
         if self.check:
             return self.config['features']
         else:

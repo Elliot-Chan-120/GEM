@@ -2,7 +2,7 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-model_name = "Nov5"
+model_name = "Nov20"
 # all functions with a name guard need to be called alone
 
 # [1] sourced data extraction and processing

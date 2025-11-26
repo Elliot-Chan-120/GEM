@@ -59,21 +59,25 @@ It includes:
   - DNA instability motif analysis
   - Start/stop codon changes
 
+\
 Most notable additions to CompositeDNA:
 
 **HMM Genomic Domain Analysis**
+
 *Predicts alterations to the genomic regulatory landscape through probabilistic state modeling*
+
 The HMM module translates DNA sequences into their optimized state paths using the Viterbi algorithm. From this optimized state path, it tracks:
 - **Domain Composition Shifts**: How variants change the proportion of coding, noncoding, regulatory, transcribable domains
 - **State Transition Disruptions**: Detection of domain boundary changes, Gaussian decay-weighted by proximity to mutation sites
 - **Multi-Scale Monitoring**: Three analysis windows capture local and broad domain effects
 
 **Repeat Instability Analysis - (Enhanced Microsatellite Detection)**
+
 Goes beyond repeat counting to capture biological mechanisms like expansions, contractions, and slippage-mediated mutagenesis
 - **Loci Tracking**: detects complete loss and gain of repeat regions
 - **Expansion / Contraction**: quantifies bp changes within existing repeat loci
 - **Weighted Scoring**: larger repeat units weighted more heavily
-- ** Integrates multiple disruption types to capture synergistic effects
+- **Composite Scoring**: Integrates multiple disruption types to capture synergistic effects
 
 
 \
@@ -417,7 +421,11 @@ benchmarkgene2,1,0.027637959,0.97236204
 
 ## ReGen example Input and Results
 Users need to insert a FASTA file of the same custom format in the ReGen_input folder
-**IMPORTANT NOTE** Due to substantial feature engineering improvements between versions, ReGen optimization runs changed significantly.
+
+\
+**IMPORTANT NOTE** 
+\
+Due to substantial feature engineering improvements between versions, ReGen optimization runs changed significantly.
 Example below does not include benign-threshold variants as those were unable to be found with ReGen's current iteration, unlike previous versions.
 
 Results changed due to massive improvements and changes. Addition of regulatory disruption detections, domain boundary shifts and repeat instability patterns that were not detected in previous models are now present. This means that "easy" sequence changes that were thought to be benign are now correctly identified as potentially disruptive. The optimization algorithm must now navigate a more biologically realistic but more challenging mutation landscape to effectively reduce pathogenicity.

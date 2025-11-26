@@ -10,9 +10,9 @@ Benign % chance: 2.631420
 ANALYSIS SUMMARY:
 |- Starting Score: 0.026314
 |- Original Length: 15 bp
-|- Final Variants: 1
+|- Final Variants: 3
 |- Benign Threshold Variants: 1
-|- ReGen config: 50 iterations, 1 copies
+|- ReGen config: 50 iterations, 3 copies
 
 MAX BENIGN VARIANTS PER ITERATION:
 --------------------------------------------------
@@ -86,16 +86,6 @@ Benign % increase: 79.4273316860199
    Sequence:
     TTA
 
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
 Score: 72.41823077201843 | Length: 6 bp
 Benign % increase: 69.78681087493896
    Sequence:
@@ -171,6 +161,66 @@ Benign % increase: 69.78681087493896
    Sequence:
     TTATAT
 
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence:
+    TTA
+
 Score: 72.41823077201843 | Length: 6 bp
 Benign % increase: 69.78681087493896
    Sequence:
@@ -190,56 +240,6 @@ Score: 82.05875158309937 | Length: 3 bp
 Benign % increase: 79.4273316860199
    Sequence:
     TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-Score: 72.41823077201843 | Length: 6 bp
-Benign % increase: 69.78681087493896
-   Sequence:
-    TTATAT
-
-Score: 72.41823077201843 | Length: 6 bp
-Benign % increase: 69.78681087493896
-   Sequence:
-    TTATAT
 
 Score: 82.05875158309937 | Length: 3 bp
 Benign % increase: 79.4273316860199
@@ -275,6 +275,16 @@ Benign % increase: 79.4273316860199
 
 FINAL VARIANTS:
 --------------------------------------------------
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence: 
+    TTA
+
+Score: 82.05875158309937 | Length: 3 bp
+Benign % increase: 79.4273316860199
+   Sequence: 
+    TTA
+
 Score: 82.05875158309937 | Length: 3 bp
 Benign % increase: 79.4273316860199
    Sequence: 

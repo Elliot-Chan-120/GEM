@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import re
 import os
+import random
 
 import sklearn
 
@@ -16,6 +17,7 @@ from a02_4_ProtMatrix_Toolkit import *
 from a03_LookingGlass import *
 from b00_bio_library import ALL_AA_COMBINATIONS
 from b01_utility import custom_parse
+from DataSift import *
 
 
 
@@ -68,6 +70,10 @@ class ReGen:
         print(f"Allocated cores per pool: {max_cores}")
         print(f"DNA pool workers: {self.DNA_module._pool._processes}")
         print(f"Total workers across all pools: {max_cores * 4}")
+
+        control = SiftControl()
+        control.LoadConfig(self.model_name)
+        self.Sift = control.LoadSift()
 
     def repair(self):
         """
@@ -243,6 +249,7 @@ class ReGen:
 
     # helper functions
     def mutation_fp(self, variant_dataframe):
+        # maybe turn this general thing into a helper function?
         df = variant_dataframe.copy()
         composite_dataframe = self.Prot_module.gen_AAseqs(df)
 
@@ -250,8 +257,9 @@ class ReGen:
         prot_df = self.Prot_module.gen_AAfp_dataframe(composite_dataframe)
         dnapwm_df = self.DNApwm_module.gen_DNAPWM_dataframe(composite_dataframe)
         aapwm_df = self.AApwm_module.gen_AAPWM_dataframe(composite_dataframe)
+        hmm_df = self.DNA_module.gen_HMM_dataframe(composite_dataframe)
 
-        variant_df = pd.concat([dna_df, prot_df, dnapwm_df, aapwm_df], axis=1)
+        variant_df = pd.concat([dna_df, prot_df, dnapwm_df, aapwm_df, hmm_df], axis=1)
 
         useless_columns = ['ref_protein_list', 'alt_protein_list',
                            'non_ambiguous_ref', 'non_ambiguous_alt',
@@ -262,7 +270,14 @@ class ReGen:
         return variant_df
 
     def benign_score(self, muta_fingerprint):
-        predictions = self.model.predict_proba(muta_fingerprint.drop(['ClinicalSignificance'], axis=1))[:, 0]
+        # take out Y and duplicated columns
+        variant_df = muta_fingerprint.drop(['ClinicalSignificance'], axis=1)
+        variant_df = variant_df.loc[:, ~variant_df.columns.duplicated()]
+
+        # apply sift
+        variant_df = variant_df[self.Sift]
+
+        predictions = self.model.predict_proba(variant_df)[:, 0]
         return pd.Series(predictions)
 
 

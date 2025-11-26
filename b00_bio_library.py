@@ -124,7 +124,6 @@ NN_FREE_ENERGY = {
 
 # IUPAC nucleotide codes mapping for ambiguous stuff
 IUPAC_CODES = {
-    'A': ['A'], 'T': ['T'], 'C': ['C'], 'G': ['G'],
     'R': ['A', 'G'],  # puRine
     'Y': ['C', 'T'],  # pYrimidine
     'S': ['G', 'C'],  # Strong (3 H-bonds)
@@ -138,11 +137,9 @@ IUPAC_CODES = {
     'N': ['A', 'T', 'C', 'G']  # aNy
 }
 
+AMBIGUOUS = "RYSWKMBDHVN"
 
 COMPLEMENTS = str.maketrans("ATCG", "TAGC")
-
-
-AMBIGUOUS = "RYSWKMBDHVN"
 
 # per chromosome ID, X: 23, Y: 24
 GENE_DENSITIES = {

@@ -1,20 +1,34 @@
+# File workers
 import gzip
 import pickle as pkl
-from pyfaidx import Fasta
+import os
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import yaml
+import tqdm
 
-from a02_1_CompositeDNA_Toolkit import *
-from a02_2_CompositeProt_Toolkit import *
-from a02_3_DNAMatrix_Toolkit import *
-from a02_4_ProtMatrix_Toolkit import *
-
+# ML stuff
 import optuna
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix
-
-import os
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import make_scorer, roc_auc_score, precision_recall_curve, auc, f1_score
+
+# Read fasta files
+from pyfaidx import Fasta
+
+# Analysis Modules
+from a02_1_CompositeDNA_Toolkit import CompositeDNA
+from a02_2_CompositeProt_Toolkit import CompositeProt
+from a02_3_DNAMatrix_Toolkit import DNAMatrix
+from a02_4_ProtMatrix_Toolkit import ProtMatrix
+
+# DataSift
+from DataSift import DataSift, SiftControl
+
+
 
 
 
@@ -49,6 +63,8 @@ class KeyStone:
         self.dna_pwm_profile_df = self.database / f"{self.cfg['dna_pwm_profile']}.pkl"
         self.aa_pwm_profile_df = self.database / f"{self.cfg['aa_pwm_profile']}.pkl"
 
+        self.hmm_profile_df = self.database / f"{self.cfg['hmm_profile']}.pkl"
+
         # final dataframe for model training
         self.final_df_path = self.database / f"{self.cfg['full_variant_df']}.pkl"
 
@@ -59,7 +75,7 @@ class KeyStone:
         self.model_path = self.model_storage / f"{self.model_name}"
 
 
-       # create full path in one go with parents=True
+        # create full path in one go with parents=True
         self.model_path.mkdir(parents=True, exist_ok=True)
 
         # dataframe settings
@@ -174,8 +190,8 @@ class KeyStone:
 
             new_df.append({
                 "Chromosome": chromosome,
-                "ReferenceAlleleVCF": ref_allele,
-                "AlternateAlleleVCF": alt_allele,
+                "ReferenceAlleleVCF": ref_allele.upper(),
+                "AlternateAlleleVCF": alt_allele.upper(),
                 "Flank_1": flank1.upper(),
                 "Flank_2": flank2.upper(),
                 "ClinicalSignificance": clinsig
@@ -282,8 +298,24 @@ class KeyStone:
         return True
 
 
+    def generate_hmm_profile(self):
+        with open(self.composite_dataframe, 'rb') as infile:
+            df = pkl.load(infile)
+
+        with CompositeDNA() as dna_pwm_module:
+            hmm_df = dna_pwm_module.gen_HMM_dataframe(df)
+        hmm_df.index = df.index
+
+        with open(self.hmm_profile_df, 'wb') as outfile:
+            pkl.dump(hmm_df, outfile)
+
+        return True
+
+
     def get_final_dataframe(self):
-        filepaths = [self.dna_profile_df, self.prot_profile_df, self.dna_pwm_profile_df, self.aa_pwm_profile_df]
+        filepaths = [self.dna_profile_df, self.prot_profile_df,
+                     self.dna_pwm_profile_df, self.aa_pwm_profile_df,
+                     self.hmm_profile_df]
 
         for p in filepaths:
             path = Path(p)
@@ -299,6 +331,7 @@ class KeyStone:
             pd.read_pickle(self.prot_profile_df),
             pd.read_pickle(self.dna_pwm_profile_df),
             pd.read_pickle(self.aa_pwm_profile_df),
+            pd.read_pickle(self.hmm_profile_df)
         ]
 
         variant_final_df = pd.concat(dfs, axis=1)
@@ -309,10 +342,11 @@ class KeyStone:
     def train_models(self):
         """
         Call on this to train the models
-        1) Feature optimization -> not possible yet still need to tweak DataSift before using it in this pipeline
+        1) Feature optimization
         2) Hyperparameter optimization
         3) Model saving
         """
+        print("Model Training Start...")
 
         # load data and train models
         with open(self.final_df_path, 'rb') as infile:
@@ -324,14 +358,11 @@ class KeyStone:
 
         variant_dataframe = variant_dataframe.drop(useless_columns, axis=1)
 
-        for label in variant_dataframe.columns:
-            print(label)
-
         self.optimized_model(variant_dataframe)
 
 
     def optimized_model(self, df):
-        # from DataSift import DataSift
+        print("Model Optimization Initiated")
         y_label = 'ClinicalSignificance'
         df = df.loc[:, ~df.columns.duplicated()]
 
@@ -344,20 +375,30 @@ class KeyStone:
 
         y = y.map(label_map)
 
-        # Hopefully I figure out how to make this actually work well later
-        # refined_features = DataSift(XGBClassifier(),
-        #                             df,
-        #                             y_label,
-        #                             label_map).d_sift()
+        # [FEATURE OPTIMIZATION - MY BABY WORKS!]
+        feature_optimizer = DataSift(classifier_name=self.model_name,
+                                     classifier=XGBClassifier(),
+                                     dataframe=df,
+                                     y_label=y_label,
+                                     label_map=label_map,
+                                     variance_space=[0.0, 0.3],
+                                     optimize_variance=True,
+                                     max_runs=20)
 
-        # X = X[refined_features]
+        feature_optimizer.Data_Sift()
+
+        control = SiftControl()
+        control.LoadConfig(self.model_name)
+        refined_feature_list = control.LoadSift()
+
+        X = X[refined_feature_list]
 
         X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                             test_size = 0.2,
                                                             stratify=y,
                                                             random_state=42)
 
-        # == Hyperparameter Optimization ==
+        # [[== Hyperparameter Optimization ==]]
         # tuner = optuna.samplers.TPESampler(n_startup_trials=50, seed=42)  # will learn from previous trials
         # pruner = optuna.pruners.MedianPruner(n_startup_trials=30, n_warmup_steps=10)
         #
@@ -371,28 +412,55 @@ class KeyStone:
         # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=175)
         # best_params = study.best_params
 
-        best_params = {'n_estimators': 1674,
+        # These are previous hyperparam settings that gave highest performances, keeping them here just in case
+        best_params = {'n_estimators': 1991,
                        'max_depth': 10,
-                       'learning_rate': 0.034561112430304776,
-                       'subsample': 0.9212141915845736,
-                       'colsample_bytree': 0.6016405698933265,
-                       'colsample_bylevel': 0.9329109895929816,
-                       'reg_alpha': 0.7001202050122113,
-                       'reg_lambda': 3.1671750288760134,
-                       'gamma': 1.0033930419124446,
-                       'min_child_weight': 9,
-                       'scale_pos_weight': 1.6075244983571118}
+                       'learning_rate': 0.048315714286293394,
+                       'subsample': 0.8716062030455591,
+                       'colsample_bytree': 0.7443008409874943,
+                       'colsample_bylevel': 0.6307280531519474,
+                       'reg_alpha': 1.2219974561574183,
+                       'reg_lambda': 5.293562555251874,
+                       'gamma': 0.34483645155447473,
+                       'min_child_weight': 19,
+                       'scale_pos_weight': 1.803931441549998}
+
+        # best_params = {'n_estimators': 1674,
+        #                'max_depth': 10,
+        #                'learning_rate': 0.034561112430304776,
+        #                'subsample': 0.9212141915845736,
+        #                'colsample_bytree': 0.6016405698933265,
+        #                'colsample_bylevel': 0.9329109895929816,
+        #                'reg_alpha': 0.7001202050122113,
+        #                'reg_lambda': 3.1671750288760134,
+        #                'gamma': 1.0033930419124446,
+        #                'min_child_weight': 9,
+        #                'scale_pos_weight': 1.6075244983571118}
+
+        # best_params = {'n_estimators': 1677,
+        #                'max_depth': 10,
+        #                'learning_rate': 0.039293549864997175,
+        #                'subsample': 0.9969933786793387,
+        #                'colsample_bytree': 0.6482133739319931,
+        #                'colsample_bylevel': 0.6039302725209573,
+        #                'reg_alpha': 0.46607769424421325,
+        #                'reg_lambda': 3.441382674128201,
+        #                'gamma': 0.28487791075581864,
+        #                'min_child_weight': 2,
+        #                'scale_pos_weight': 1.6355990026202318}
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
 
     def evaluate_save(self, parameters, X_train, y_train, X_test, y_test):
+        print("Evaluating Model...")
 
         content = ""
         content += f"Optimal Hyperparameters: {parameters}\n"
 
         strat_fold = StratifiedKFold(n_splits = 5, shuffle=True)
 
-        model = XGBClassifier(**parameters)
+        model = XGBClassifier(early_stopping_rounds=50,
+                              **parameters)
 
         roc_scores, pr_scores, fn_counts, fp_counts = [], [], [], []
 
@@ -401,7 +469,7 @@ class KeyStone:
             X_tr, X_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
             y_tr, y_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
 
-            model.fit(X_tr, y_tr)
+            model.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=False)
             y_pred_proba = model.predict_proba(X_val)[:, 1]
 
             precision, recall, thresholds = precision_recall_curve(y_val, y_pred_proba, pos_label=1)
@@ -422,7 +490,8 @@ class KeyStone:
         content += f"Mean FNs: {np.mean(fn_counts):.2f}, Mean FPs: {np.mean(fp_counts):.2f}\n"
 
         # Train on full data and evaluate on test set
-        model.fit(X_train, y_train)
+        print("Full Data Run...")
+        model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
         y_pred_proba = model.predict_proba(X_test)[:, 1]
 
         # Calculate F1 specifically for pathogenic class
@@ -440,7 +509,6 @@ class KeyStone:
 
         # Apply optimal threshold
         y_pred_optimal = (y_pred_proba >= optimal_threshold).astype(int)
-
 
         content += f"ROC AUC: {roc_auc:.4f}\n"
         content += f"Precision-Recall AUC: {pr_auc:.4f}\n"
@@ -469,6 +537,8 @@ class KeyStone:
         savepath = self.model_path / f"{self.model_name}.pkl"
         statpath = self.model_path / f"{self.model_name}_stats.txt"
         statpath.write_text(content)
+
+        print("Model Optimization Complete! Saving...")
         if os.path.exists(savepath):
             print(f"Model {self.model_name} already exists. Skipping save to prevent overwrite")
         else:
@@ -480,9 +550,9 @@ class KeyStone:
     @staticmethod
     def objective(trial, X_train, y_train, scale_pos_weight):
         params = {
-            'n_estimators': trial.suggest_int('n_estimators', 100, 2000),
-            'max_depth': trial.suggest_int('max_depth', 3, 10),
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+            'n_estimators': trial.suggest_int('n_estimators', 800, 2000),
+            'max_depth': trial.suggest_int('max_depth', 8, 10),
+            'learning_rate': trial.suggest_float('learning_rate', 0.03, 0.3, log=True),
             'subsample': trial.suggest_float('subsample', 0.5, 1.0),
             'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0),
             'colsample_bylevel': trial.suggest_float('colsample_bylevel', 0.5, 1.0),

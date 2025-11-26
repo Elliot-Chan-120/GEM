@@ -2,8 +2,7 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
-model_name = "ReGen_v4"
-
+model_name = "ClinicalModel"
 # all functions with a name guard need to be called alone
 
 # [1] sourced data extraction and processing
@@ -29,7 +28,7 @@ def keystone_extract_proteins(model = model_name):
         raise
 
 def ks_dna_profile(model = model_name):
-    # 12-13 minutes
+    # 14 minutes
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
@@ -61,6 +60,19 @@ def ks_dnamotif_profile(model = model_name):
                 print("[PWM Profile Completed]")
     except Exception as e:
         print(f"PWM Fingerprint Generation Failed: {e}")
+        raise
+
+
+def ks_domain_profile(model = model_name):
+    # 1:50 hours
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success  = test.generate_hmm_profile()
+            if success:
+                print("[HMM-domain Profile Completed]")
+    except Exception as e:
+        print(f"HMM-domain Fingerprint Generation Failed: {e}")
         raise
 
 def ks_aamotif_profile(model = model_name):
@@ -107,4 +119,3 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
 
 # [ Command ]
 Repair_Gene()
-

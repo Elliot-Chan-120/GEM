@@ -10,22 +10,19 @@ import pandas as pd
 from collections import Counter
 import re
 from tqdm import tqdm
-import random
 
 # multiprocessing
 import multiprocessing
-from multiprocessing import Pool
 
 # initialize biological structure libraries
-from b00_bio_library import COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON
-
-
+from b00_bio_library import COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON, AMBIGUOUS, IUPAC_CODES
 
 global_config = {}
 
 def config_init(config, complements, nn_free_energy,
                 gene_densities, stops,
-                poly_tracts, intron):
+                poly_tracts, intron,
+                iupac_codes, ambiguous):
     """
     Create global variables for each worker process
     :param config:
@@ -35,10 +32,12 @@ def config_init(config, complements, nn_free_energy,
     :param stops:
     :param poly_tracts:
     :param intron:
+    :param iupac_codes:
+    :param ambiguous:
     :return:
     """
     # These become GLOBAL variables in each worker process - check multiprocessing pool functions in class
-    global global_config, COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON
+    global global_config, COMPLEMENTS, NN_FREE_ENERGY, GENE_DENSITIES, STOPS, POLY_TRACTS, INTRON, IUPAC_CODES, AMBIGUOUS
 
 
     global_config = config
@@ -48,6 +47,8 @@ def config_init(config, complements, nn_free_energy,
     STOPS = stops
     POLY_TRACTS = poly_tracts
     INTRON = intron
+    IUPAC_CODES = iupac_codes
+    AMBIGUOUS = ambiguous
 
 
 class CompositeDNA:
@@ -75,6 +76,118 @@ class CompositeDNA:
             # buffer region size
             self.structural_buffer = self.cfg['DNA_buffer_region']
 
+            # hmm search window
+            self.hmm_window = self.cfg['hmm_window']
+
+            self.initial_probs = {
+                "3UTR": 0.075,
+                "5UTR": 0.075,
+                "CDS": 0.015,
+                "Exon": 0.03,
+                "Intergenic": 0.67,
+                "Intron": 0.27,
+            }
+
+            self.emission_probs = {
+                "3UTR": {
+                    "A": 0.250000,
+                    "C": 0.250000,
+                    "G": 0.250000,
+                    "T": 0.250000,
+                },
+                "5UTR": {
+                    "A": 0.250000,
+                    "C": 0.250000,
+                    "G": 0.250000,
+                    "T": 0.250000,
+                },
+                "CDS": {
+                    "A": 0.268820,
+                    "C": 0.253455,
+                    "G": 0.258194,
+                    "T": 0.219532,
+                },
+                "Exon": {
+                    "A": 0.270445,
+                    "C": 0.233545,
+                    "G": 0.237919,
+                    "T": 0.258092,
+                },
+                "Intergenic": {
+                    "A": 0.298139,
+                    "C": 0.200534,
+                    "G": 0.201782,
+                    "T": 0.299545,
+                },
+                "Intron": {
+                    "A": 0.280442,
+                    "C": 0.200074,
+                    "G": 0.209608,
+                    "T": 0.309875,
+                },
+            }
+
+            self.transition_probs = {
+                "3UTR": {
+                    "3UTR": 0.166667,
+                    "5UTR": 0.166667,
+                    "CDS": 0.166667,
+                    "Exon": 0.166667,
+                    "Intergenic": 0.166667,
+                    "Intron": 0.166667,
+                },
+                "5UTR": {
+                    "3UTR": 0.166667,
+                    "5UTR": 0.166667,
+                    "CDS": 0.166667,
+                    "Exon": 0.166667,
+                    "Intergenic": 0.166667,
+                    "Intron": 0.166667,
+                },
+                "CDS": {
+                    "3UTR": 0.000000,
+                    "5UTR": 0.000000,
+                    "CDS": 0.142494,
+                    "Exon": 0.000000,
+                    "Intergenic": 0.000000,
+                    "Intron": 0.857506,
+                },
+                "Exon": {
+                    "3UTR": 0.000000,
+                    "5UTR": 0.000000,
+                    "CDS": 0.836724,
+                    "Exon": 0.000000,
+                    "Intergenic": 0.000000,
+                    "Intron": 0.163276,
+                },
+                "Intergenic": {
+                    "3UTR": 0.166667,
+                    "5UTR": 0.166667,
+                    "CDS": 0.166667,
+                    "Exon": 0.166667,
+                    "Intergenic": 0.166667,
+                    "Intron": 0.166667,
+                },
+                "Intron": {
+                    "3UTR": 0.000000,
+                    "5UTR": 0.000000,
+                    "CDS": 0.000000,
+                    "Exon": 1.000000,
+                    "Intergenic": 0.000000,
+                    "Intron": 0.000000,
+                },
+            }
+
+            self.states = ['3UTR', '5UTR', 'CDS', 'Exon', 'Intergenic', 'Intron']
+
+            # initialize starting transition state dictionary for future tracking
+            self.transstate_dict = {}
+            for state in self.states:
+                for next_state in self.states:
+                    if state != next_state:
+                        self.transstate_dict.update({f"{state}_to_{next_state}": 0})
+
+
 
         # create config for downstream multiproc
         self.config = {
@@ -86,7 +199,15 @@ class CompositeDNA:
             'max_repeat_length': self.max_repeat_length,
             'min_repeats': self.min_repeats,
             'structural_buffer': self.structural_buffer,
-            'sub_matrix': self.sub_matrix
+            'sub_matrix': self.sub_matrix,
+
+            # HMM parameters
+            'hmm_window': self.hmm_window,
+            'init_probs': self.initial_probs,
+            'emit_probs': self.emission_probs,
+            'trans_probs': self.transition_probs,
+            'states': self.states,
+            'transstate_dict': self.transstate_dict,
         }
 
         # define number of cores
@@ -109,7 +230,8 @@ class CompositeDNA:
                 initializer=config_init,
                 initargs=(self.config, COMPLEMENTS,
                           NN_FREE_ENERGY, GENE_DENSITIES, STOPS,
-                          POLY_TRACTS, INTRON)
+                          POLY_TRACTS, INTRON,
+                          IUPAC_CODES, AMBIGUOUS)
             )
 
     def terminate_pool(self):
@@ -188,8 +310,14 @@ class CompositeDNA:
             'Chromosome_density']
 
         # mutation composite
-        fp['FI_Mutation_composite'] = (fp['Tandem_Duplications'] + fp['Hairpins'] + fp['Microsatellites'] +
-                                       fp['Poly_tracts'] + fp['SNVs'] + fp['Insertion_length'])
+        fp["FI_Mutation_composite"] = (
+            fp["Tandem_Duplications"]
+            + fp["Hairpins"]
+            + fp["tr_base_composite"]
+            + fp["Poly_tracts"]
+            + fp["SNVs"]
+            + fp["Insertion_length"]
+        )
 
         return fp
 
@@ -290,24 +418,27 @@ class CompositeDNA:
             # 1 - Mutations / structure changes
             'Tandem_Duplications': self.duplication_delta(ref_buffered, alt_buffered, config),
             'Hairpins': self.hairpin_count_delta(ref_buffered, alt_buffered),
-            'Microsatellites': self.microsatellite_delta(ref_buffered, alt_buffered, ref_kmer_freqs, alt_kmer_freqs, config),
 
             # 2 - start and stop codons gain / loss
             'Start_codons': self.start_delta(ref_buffered, alt_buffered),
             'Stop_codons': self.stop_delta(ref_buffered, alt_buffered),
 
-            # 3 - intron changes - oh my god i forgot to delete this BEFORE model training so now it has to stay until the next run. will fix this.
+            # 3 - intron changes
             'Introns': self.intron_delta(ref_buffered, alt_buffered),
 
             # 4 - transcription factor and instability motifs
             'Poly_tracts': self.poly_tract_delta(ref_buffered, alt_buffered)
         }
 
+        flanked_fp.update(self.repeat_instab(ref_buffered, alt_buffered, ref_kmer_freqs, alt_kmer_freqs, config))
+
         # 2 Feature Interactions
-        flanked_fp['FI_Mutation_propensity'] = ((flanked_fp['Tandem_Duplications'] +
-                                                 flanked_fp['Hairpins'] +
-                                                 flanked_fp['Microsatellites'] +
-                                                 flanked_fp['Poly_tracts']))
+        flanked_fp["FI_Mutation_propensity"] = (
+            flanked_fp["Tandem_Duplications"]
+            + flanked_fp["Hairpins"]
+            + flanked_fp["tr_base_composite"]
+            + flanked_fp["Poly_tracts"]
+        )
         return flanked_fp
 
     # =====[[ALIGNMENT DATA]]=====
@@ -837,8 +968,8 @@ class CompositeDNA:
 
         return hairpin_count
 
-    # Microsatellites
-    def microsatellite_delta(self, br_original, br_mutation, glb_ori_kmer_freqs, glb_muta_kmer_freqs, config):
+    # Repeat Instability
+    def repeat_instab(self, br_original, br_mutation, glb_ori_kmer_freqs, glb_muta_kmer_freqs, config):
         """
         Global sequences - Needs kmer frequencies from kmer_stats
         :param br_original:
@@ -846,42 +977,152 @@ class CompositeDNA:
         :param glb_ori_kmer_freqs:
         :param glb_muta_kmer_freqs:
         :param config:
-        :return: # of microsatellites lost [0] and gained [1]
+        :return: repeat instability profile -> add this as a dictionary
         """
         if not glb_ori_kmer_freqs or not glb_muta_kmer_freqs:
-            return 0
-        else:
-            k_min, k_max = config['k_min'], config['k_max']
-            orig_candidates = [kmer for kmer, freq in glb_ori_kmer_freqs.items()
-                               if k_min <= len(kmer) < k_max and freq >= config['min_repeats']]
-            muta_candidates = [kmer for kmer, freq in glb_muta_kmer_freqs.items()
-                               if k_min <= len(kmer) < k_max and freq >= config['min_repeats']]
+            return 0, 0, 0, 0, 0
 
-            # call on helper functions to determine if any of the kmers belong to a microsatellite
-            orig_sats = self.tandem_repeat(orig_candidates, br_original, config)
-            muta_sats = self.tandem_repeat(muta_candidates, br_mutation, config)
+        k_min, k_max = config['k_min'], config['k_max']
+        orig_candidates = [kmer for kmer, freq in glb_ori_kmer_freqs.items()
+                           if k_min <= len(kmer) < k_max and freq >= config['min_repeats']]
 
-        return len(muta_sats) - len(orig_sats)
+        muta_candidates = [kmer for kmer, freq in glb_muta_kmer_freqs.items()
+                           if k_min <= len(kmer) < k_max and freq >= config['min_repeats']]
+
+        # call on helper functions to determine if any of the kmers belong to a microsatellite
+        orig_sats = self.tandem_repeat(orig_candidates, br_original, config)
+        muta_sats = self.tandem_repeat(muta_candidates, br_mutation, config)
+
+        # process both dictionaries
+        orig_trs = set(orig_sats.keys())
+        muta_trs = set(muta_sats.keys())
+        repeats_lost = orig_trs - muta_trs
+        repeats_gain = muta_trs - orig_trs
+        microsat_delta = len(muta_trs) - len(orig_trs)
+
+        composite = 0
+
+        for tr in repeats_lost:
+            composite += sum(orig_sats[tr])
+
+        for tr in repeats_gain:
+            composite += sum(muta_sats[tr])
+
+        shared_trs = orig_trs & muta_trs
+        for tr in shared_trs:
+            composite += sum(muta_sats[tr]) - sum(orig_sats[tr])
+
+        # in case something goes wrong, uncomment this
+        # print(f"len_repeats_lost: {len(repeats_lost)}")
+        # print(f"len_repeats_gain: {len(repeats_gain)}")
+        # print(f"microsat_delta: {microsat_delta}")
+        # print(f"composite: {composite}")
+        # print(f"repeat_instab: {repeat_instab}")
+
+        microsat_dict = {
+            "tr_base_composite": composite,
+            "Microsat_delta": microsat_delta,
+        }
+
+        microsat_dict.update(self.repeat_instab_data(repeats_lost, repeats_gain, shared_trs, orig_sats, muta_sats))
+
+        return microsat_dict
 
     # helper function for microsatellite detection
     @staticmethod
     def tandem_repeat(candidates, sequence, config):
         """Figures out microsatellite regions"""
-        satellites = set()
 
         # this is saying for kmer 'x' occuring 'min_repeats'+ times, add it to patterns
         # chose to use re.escape because of user-defined strings later on - may accidentally insert a character
+
         patterns = {
             # repeats previous group / token min number of times
-            kmer: re.compile(f'({re.escape(kmer)}){{{config['min_repeats']},}}')
+            kmer: re.compile(f"({re.escape(kmer)}){{{config['min_repeats']},}}")
             for kmer in candidates
         }
 
+        satellites = {}
         for kmer, pattern in patterns.items():
-            if pattern.search(sequence):
-                satellites.add(kmer)
+            occurrences = list(re.finditer(pattern, sequence)) # makes the next line easier to read
+            if occurrences:
+                satellites.update({kmer: [len(item.group()) for item in occurrences]})
+
+        # so after all of this satellites should look like:
+        # {"CGGGA": [20, 21, 39, 80]}
 
         return satellites
+
+    @staticmethod
+    def repeat_instab_data(repeats_lost, repeats_gain, shared_trs, orig_sats, muta_sats):
+        """
+        Repeat instability should reflect how much the repeat landscape has changed in a biologically meaningful way
+        \ncomplete loss / gain of repeat loci are weighted highest -> multiplied by their length
+        \ntotal bp changes for lost/gained loci
+        \nmeasure expansion or contraction within shared repeats
+        \nweigh by repeat unit size
+        :return:
+        """
+        # loci changes
+        loci_lost = len(repeats_lost)
+        loci_gain = len(repeats_gain)
+
+        # total bp changes
+        bp_lost = sum(sum(orig_sats[tr]) for tr in repeats_lost)
+        bp_gain = sum(sum(muta_sats[tr]) for tr in repeats_gain)
+
+        # weighted data by repeat unit type
+        wbp_lost = sum(sum(orig_sats[tr]) * len(tr) for tr in repeats_lost)
+        wbp_gain = sum(sum(muta_sats[tr]) * len(tr) for tr in repeats_gain)
+
+        # expansion and contraction scores
+        expansion_score = 0
+        contraction_score = 0
+
+        w_expansion_score = 0
+        w_contraction_score = 0
+
+        for tr in shared_trs:
+            orig_total_bp = sum(orig_sats[tr])
+            muta_total_bp = sum(muta_sats[tr])
+            bp_delta = muta_total_bp - orig_total_bp
+
+            if bp_delta > 0:
+                expansion_score += bp_delta
+                w_expansion_score += bp_delta * len(tr)
+            else:
+                contraction_score += abs(bp_delta)
+                w_contraction_score += abs(bp_delta) * len(tr)
+
+        # get other scores ready
+        simple_score = bp_lost + bp_gain + expansion_score + contraction_score
+        w_simple_score = wbp_lost + wbp_gain + w_expansion_score + w_contraction_score
+
+        composite_score = (loci_lost + loci_gain) + w_simple_score
+
+        return {
+            'tr_loci_lost': loci_lost,
+            'tr_loci_gain': loci_gain,
+            'tr_bp_gain': bp_gain,
+            'tr_bp_loss': bp_lost,
+            'tr_expansion_score': expansion_score,
+            'tr_contraction_score': contraction_score,
+
+            # weighted scores
+            'tr_weighted_bploss': wbp_lost,
+            'tr_weighted_bpgain': wbp_gain,
+            'tr_weighted_expansion_score': w_expansion_score,
+            'tr_weighted_contraction_score': w_contraction_score,
+
+            # scores
+            # 'tr_simple_score': simple_score,  # test run without these scores
+            # 'tr_weighted_score': w_simple_score,
+            'tr_composite_score': composite_score,
+        }
+
+
+
+
 
     def start_delta(self, br_original, br_mutation):
         """
@@ -933,3 +1174,346 @@ class CompositeDNA:
             intron_count = result
         return intron_count
 
+
+# [[[WORK IN PROGRESS]]]
+    def gen_HMM_dataframe(self, dataframe):
+        fingerprint_rows = [
+            (row['ReferenceAlleleVCF'], row['AlternateAlleleVCF'],
+             row['Flank_1'], row['Flank_2'])
+            for _, row in dataframe.iterrows()
+        ]
+
+        fingerprint_rows = list(tqdm(
+            CompositeDNA._pool.imap(self.hmm_wrapper, fingerprint_rows),
+            total=len(fingerprint_rows),
+            desc="[Extracting broad domain changes]"
+        ))
+
+        hmm_df = pd.DataFrame(fingerprint_rows)
+        hmm_df = pd.concat([dataframe.reset_index(drop=True), hmm_df], axis=1)
+
+        hmm_df = hmm_df.drop(['ReferenceAlleleVCF', 'AlternateAlleleVCF', 'Flank_1', 'Flank_2'], axis=1)
+
+        return hmm_df
+
+    def hmm_wrapper(self, fp_row):
+        ref_allele, alt_allele, flank_1, flank_2 = fp_row
+        hmm_window_range = global_config['hmm_window']
+        result_dict = {}
+
+        # multi-scaled results
+        for results in self.multi_scale_viterbi(ref_allele, alt_allele, flank_1, flank_2, hmm_window_range):
+            # ok remember that ref is sequence 1, alt is sequence 2
+            result_dict.update(results)
+
+        return result_dict
+
+    def multi_scale_viterbi(self, ref_vcf, alt_vcf, flank1, flank2, hmm_window_range):
+        result_list = []
+
+        scales = [1, 2, 0.5]  # standard, long, close range analysis of path composition changes
+        for scale in scales:
+            scaled_window = int(hmm_window_range * scale)
+
+            scaled_flank1 = flank1[-scaled_window:]
+
+            scaled_flank2 = flank2[:scaled_window]
+            scaled_ref = scaled_flank1 + ref_vcf + scaled_flank2
+            scaled_alt = scaled_flank1 + alt_vcf + scaled_flank2
+
+            results = self.viterbi_delta(scaled_ref, scaled_alt, len(scaled_flank1))
+
+            scaled_results = {f"{scale}xScale_{key}": value for key, value in results.items()}
+            result_list.append(scaled_results)
+
+        return result_list  # remember to unpack this list in wrapper
+
+
+    def viterbi_delta(self, scaled_ref, scaled_alt, flank_length):
+        base_dict = {state_orig: 0 for state_orig in global_config['states']}
+        vtbi_prob1, vtbi_seq1 = self.opt_viterbi(scaled_ref)
+        vtbi_prob2, vtbi_seq2 = self.opt_viterbi(scaled_alt)
+
+        # establish base profile
+        for char in vtbi_seq1:
+            base_dict[char] += float(1 / len(vtbi_seq1))
+
+        # track changes
+        for char in vtbi_seq2:
+            base_dict[char] -= float(1 / len(vtbi_seq2))
+
+
+        # transition state tracking - okay debug this
+        base_dict.update(self.transstate_delta(vtbi_seq1, vtbi_seq2))
+
+        # v-prob tracking
+        base_dict.update({'V_prob_delta': float(vtbi_prob2 - vtbi_prob1)})
+
+        # state determination + boundary composite scores
+        base_dict.update(self.state_stats(vtbi_seq1, vtbi_seq2, flank_length))
+
+        return base_dict
+
+    def opt_viterbi(self, sequence):
+        # to-do: log normalize the scores and fix possible division by 0
+        # also: input setting to establish domain search window, maybe 1000 bps minimum is a little excessive
+        seq_len = len(sequence)
+        if seq_len == 0:
+            return -np.inf, []
+
+        viterbi = {}
+        backptr = [{} for _ in range(seq_len)]
+
+        # initialize - position 0
+        # normalize with log probabilities
+        for state in global_config['states']:
+            init_prob = self.get_init_prob(state)
+            emit_prob = self.get_emission_prob(state, sequence[0])
+
+            viterbi[state] = init_prob + emit_prob
+
+        for t in range(1, seq_len):
+            viterbi_previous = viterbi
+            viterbi = {}
+
+            for state_dest in global_config['states']:
+                max_prob = -np.inf
+                max_state = None
+
+                for state_orig in global_config['states']:
+                    prob = (viterbi_previous[state_orig] +
+                            self.get_transition_prob(state_dest, state_orig))
+
+                    if prob > max_prob:
+                        max_prob = prob
+                        max_state = state_orig
+
+                # stores the probability score and the original state
+                viterbi[state_dest] = (max_prob +
+                                       self.get_emission_prob(state_dest, sequence[t]))
+                backptr[t][state_dest] = max_state
+
+        # traceback
+        max_state = max(viterbi.items(), key=lambda x: x[1])[0]
+        max_prob = viterbi[max_state]
+
+        # reconstruct path
+        path = [max_state]
+        for t in range(seq_len - 1, 0, -1):  # iterate backwards and figure out which state you came from
+            max_state = backptr[t][max_state]
+            path.insert(0, max_state)
+
+        return max_prob, path
+
+    @staticmethod
+    def get_init_prob(state):
+        if state in global_config['states']:
+            prob = global_config['init_probs'][state]
+            return np.log(prob) if prob > 0 else -np.inf
+        else:
+            return -np.inf
+
+    @staticmethod
+    def get_emission_prob(state, symbol):
+        if state in global_config['states']:
+            if symbol in AMBIGUOUS:
+                prob = np.mean([global_config['emit_probs'][state][char] for char in IUPAC_CODES[symbol]])
+                return np.log(prob) if prob > 0 else -np.inf
+            else:
+                prob = global_config['emit_probs'][state][symbol]
+                return np.log(prob) if prob > 0 else -np.inf
+        else:
+            return -np.inf
+
+    @staticmethod
+    def get_transition_prob(state_orig, state_dest):
+        if state_orig in global_config['states'] and state_dest in global_config['states']:
+            prob = global_config['trans_probs'][state_orig][state_dest]
+            return np.log(prob) if prob > 0 else -np.inf
+        else:
+            return -np.inf
+
+    def transstate_delta(self, v_seq1, v_seq2):
+        ts_delta = {}
+        ts_statecopy = global_config['transstate_dict']
+
+        ts_dict1 = self.transstate_composition(v_seq1, ts_statecopy)
+        ts_dict2 = self.transstate_composition(v_seq2, ts_statecopy)
+
+        for key in ts_statecopy.keys():
+            ts_delta.update({key: int(ts_dict1[key] - ts_dict2[key])})
+
+        return ts_delta
+
+    @staticmethod
+    def transstate_composition(seq, state_dict):
+        """
+        transitional state change composition tracker
+        :param seq:
+        :param state_dict: initialized at class instantiation
+        :return:
+        """
+        copy = state_dict.copy()
+
+        # build dictionary based off of all possible state changes and track differences between them
+        for idx in range(len(seq)-1):
+            current_state = seq[idx]
+            next_state = seq[idx+1]
+            if next_state != current_state:
+                copy[f"{current_state}_to_{next_state}"] += 1
+        return copy
+
+    # future work -> variant level analysis
+    # variant level barely changes the genomic context -> so maybe focus effort into close range
+    # track state prob. changes at the variant pos.
+    # track what domain the mutation occurred, composition of its neighbours
+
+    def state_stats(self, state_seq1, state_seq2, flank_length):
+        stat_dict = {}
+
+        seq1_states, rnb1, rnb2 = self.state_identifier(state_seq1, flank_length)
+        seq2_states, anb1, anb2  = self.state_identifier(state_seq2, flank_length)
+
+        # get statistics for core variant sequences - no flag because we'll fill this in during comparison
+        rv_stat_analysis = self.state_analysis(seq1_states, flag='')
+        rv_subg_analysis = self.subgroup_analysis(seq1_states, flag= '')
+        av_stat_analysis = self.state_analysis(seq2_states, flag='')
+        av_subg_analysis = self.subgroup_analysis(seq2_states, flag='')
+
+        # mutation-resulted stat shifts
+        stat_dict.update(self.compare_dicts(rv_stat_analysis, av_stat_analysis, flag='varState_delta'))
+        stat_dict.update(self.compare_dicts(rv_subg_analysis, av_subg_analysis, flag='varSubgr_delta'))
+
+        # statistics about neighbouring sequences - maybe this will be a little difficult to navigate
+        stat_dict.update(self.state_analysis(rnb1, flag='RefNB1'))
+        stat_dict.update(self.subgroup_analysis(rnb1, flag='RefNB1'))
+
+        stat_dict.update(self.state_analysis(rnb2, flag='RefNB2'))
+        stat_dict.update(self.subgroup_analysis(rnb2, flag='RefNB2'))
+
+        # boundary composite delta
+        stat_dict.update(self.boundary_composite_delta(seq1_states, seq2_states, rnb1, rnb2))
+
+        return stat_dict
+
+
+    @staticmethod
+    def state_identifier(state_seq, len_flank):
+        variant_length = len(state_seq) - (2 * len_flank)
+        variant_start = len_flank
+        variant_end = len_flank + variant_length
+
+        variant_states = state_seq[variant_start: variant_end]
+
+        neighbour_window = len_flank // 2
+
+        neighbour1 = state_seq[variant_start - neighbour_window: variant_start]
+        neighbour2 = state_seq[variant_end:variant_end + neighbour_window]
+
+        return variant_states, neighbour1, neighbour2
+
+    @staticmethod
+    def state_analysis(state_seq, flag, pseudocount = 1):
+        possible_states = {state: 0 for state in global_config['states']}
+
+        # record all states in mutation zone
+        for state in state_seq:
+            possible_states[state] += 1
+
+        # name items according to the flag given - variant, neighbour1, neighbour2
+        result_dict = {}
+        result_dict.update({f"{flag}_{state}_rawc": result for state, result in possible_states.items()})
+        seqlen = max(len(state_seq), 1)
+        result_dict.update({f"{flag}_{state}_log2": float(np.log2((result+pseudocount)/seqlen)) for state, result in possible_states.items()})
+        result_dict.update({f"{flag}_{state}_pctg": (result/seqlen) for state, result in possible_states.items()})
+
+        return result_dict
+
+
+    @staticmethod
+    def subgroup_analysis(state_seq, flag, pseudocount = 1):
+        subgroup_results = {
+            'coding': 0,
+            'noncoding': 0,
+            'regulatory': 0,
+            'transcribable': 0,
+            'processing': 0
+        }
+
+        domain_dict = {
+            'Exon': ['coding', 'transcribable', 'processing'],
+            'Intron': ['noncoding', 'regulatory'],
+            'Intergenic': ['noncoding'],
+            '3UTR': ['noncoding', 'regulatory', 'transcribable', 'processing'],
+            '5UTR': ['noncoding', 'regulatory', 'transcribable', 'processing'],
+            'CDS': ['coding', 'transcribable']
+        }
+
+        for group in state_seq:
+            for subgroup in domain_dict[group]:
+                subgroup_results[subgroup] += 1
+
+        result_dict = {}
+        result_dict.update({f"{flag}_{group}_rawc": result for group, result in subgroup_results.items()})  # raw count
+        seqlen = max(len(state_seq), 1)
+        result_dict.update({f"{flag}_{group}_log2": float(np.log2((result+pseudocount)/seqlen)) for group, result in subgroup_results.items()})
+        result_dict.update({f"{flag}_{group}_pctg": (result / seqlen) for group, result in subgroup_results.items()})
+
+        return result_dict
+
+    @staticmethod
+    def compare_dicts(dict1, dict2, flag):
+        return {f"{flag}_{key}": dict1[key] - dict2[key] for key in dict1 if key in dict2}
+
+    def boundary_composite_delta(self, ref_vcf_vtbi, alt_vcf_vtbi, f1_vtbi, f2_vtbi):
+        """
+        Calculate composite score based on how close domain boundaries are to the mutation site
+        """
+        if len(f2_vtbi) != len(f1_vtbi):
+            raise ValueError("Flank Length Inconsistent")
+
+        flank_length = len(f1_vtbi)
+
+        # get coordinates
+        variant_start = flank_length
+        refvar_end = flank_length + len(ref_vcf_vtbi)
+        altvar_end = flank_length + len(alt_vcf_vtbi)
+
+        # reassemble full state sequences
+        ref_full = f1_vtbi + ref_vcf_vtbi + f2_vtbi
+        alt_full = f1_vtbi + alt_vcf_vtbi + f2_vtbi
+
+        # get boundaries
+        ref_boundaries = [idx for idx in range(len(ref_full) - 1) if ref_full[idx] != ref_full[idx + 1]]
+        alt_boundaries = [idx for idx in range(len(alt_full) - 1) if alt_full[idx] != alt_full[idx + 1]]
+
+        ref_composite = self.boundary_gaussian(ref_boundaries, variant_start, refvar_end, len(ref_vcf_vtbi))
+        alt_composite = self.boundary_gaussian(alt_boundaries, variant_start, altvar_end, len(alt_vcf_vtbi))
+
+        # get coordinates of both mutation zones - start and stop
+        # get coordinates of all domain boundaries
+        # gaussian decay for domain boundaries the closer it gets to mutation zone
+
+        return {"Boundary_Composite_delta": alt_composite - ref_composite}
+
+    def boundary_gaussian(self, idxs, var_start, var_end, sigma):
+        distances = self.distance_from_window(idxs, var_start, var_end)
+        weights = self.gaussian_eq(distances, sigma)
+
+        return sum(weights)
+
+    @staticmethod
+    def distance_from_window(idx_list, window_start, window_end):
+        idxs = np.array(idx_list)
+        dist = np.where(idxs < window_start,
+                        window_start - idxs,
+                        np.where(idxs > window_end, idxs - window_end, 0))
+
+        return dist.tolist()
+
+    @staticmethod
+    def gaussian_eq(distances, sigma):
+        distances = np.asarray(distances)
+        weights = np.exp(-(distances**2) / (2 * sigma**2))
+        weights[distances==0] = 1.0
+        return weights

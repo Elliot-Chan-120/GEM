@@ -11,8 +11,10 @@
 GEM (Gene Edit Machine) is a machine learning-powered platform designed to classify and optimize gene variants for reduced pathogenicity. 
 What makes this a GEM?
 - integrates ClinVar and GRCh38 human genome assembly data to build detailed, context-inclusive sequences
+- Extracts 500+ features using my original DNA sequence fingerprinting modules: CompositeDNA, CompositeProt, DNAMatrix, ProtMatrix
 - uses biochemical data and research-backed feature extraction at both the DNA and protein level
 - detects and extracts regulatory region disruptions in various domains on both DNA and protein levels
+- employs optimized state path and domain composition changes across multiple genomic scales
 - trains optimized XGBoost models to classify benign and pathogenic mutation variants
 - suggests guided edits to reduce variant pathogenicity
 
@@ -47,7 +49,6 @@ It includes:
   - GC content and CpG island disruption analysis 
   - Shannon entropy for sequence complexity
   - Hairpin structure prediction
-  - Microsatellite detection
   - Intron detections
 - Mutation Detection
   - SNV (Single Nucleotide Variant) identification
@@ -57,6 +58,23 @@ It includes:
   - Transcription factor motif disruptions
   - DNA instability motif analysis
   - Start/stop codon changes
+
+Most notable additions to CompositeDNA:
+
+**HMM Genomic Domain Analysis**
+*Predicts alterations to the genomic regulatory landscape through probabilistic state modeling*
+The HMM module translates DNA sequences into their optimized state paths using the Viterbi algorithm. From this optimized state path, it tracks:
+- **Domain Composition Shifts**: How variants change the proportion of coding, noncoding, regulatory, transcribable domains
+- **State Transition Disruptions**: Detection of domain boundary changes, Gaussian decay-weighted by proximity to mutation sites
+- **Multi-Scale Monitoring**: Three analysis windows capture local and broad domain effects
+
+**Repeat Instability Analysis - (Enhanced Microsatellite Detection)**
+Goes beyond repeat counting to capture biological mechanisms like expansions, contractions, and slippage-mediated mutagenesis
+- **Loci Tracking**: detects complete loss and gain of repeat regions
+- **Expansion / Contraction**: quantifies bp changes within existing repeat loci
+- **Weighted Scoring**: larger repeat units weighted more heavily
+- ** Integrates multiple disruption types to capture synergistic effects
+
 
 \
 **CompositeProt: High-performance comprehensive Amino-Acid Chain / Protein Analysis**
@@ -151,6 +169,14 @@ This meant that disruptions to motifs occurring close the mutation site's window
 Regulatory elements rarely function in isolation, in many cases breaking one regulatory site is less severe than compromising an entire regulatory hub, hence the implementation of a cluster composite scoring algorithm.
 Unlike simply counting motifs, this identifies synergistic disruption, when variants don't remove individual sites but break down coordinated regulatory 'clusters'.
 
+### Why HMM?
+Genomic domains can be interpreted through probabilistic zones with characteristic base compositions. While PWM's can detect whether a variant can hit a splice site, it might not be able to predict whether the local sequence's signature changes from Exon to Intron, which is biologically meaningful.
+The HMM analysis algorithms capture these subtle compositional shifts that position-based methods may miss. The multi-scale approach addresses the fact that some variants have various effect ranges, by capturing all of them.
+
+### Why Overhaul Microsatellite Detection? 
+The original module counted simple microsatellite frequency changes, which ended up being top 2 predictive signals for pathogenicity for almost every single project iteration. By going further in depth and analyzing not just how many but *how* these microsatellites changed and quantifying overall repeat instability changes, more meaningful biological signal was captured. This is reflected immensely in the feature importance analysis as all "tr" (Tandem Repeat) labelled features are at the top.
+
+
 ### Flexible Multiprocessing
 Both CompositeDNA and CompositeProt were optimized with multiprocessing by initializing a multiprocessing pool upon class instantiation, terminating automatically when under a context manager (with xyz as CompositeDNA/Prot(core_num=max_cores-2)).
 This sped up protein analysis time from a predicted 8-9 hours to 1:30.
@@ -160,7 +186,7 @@ This saved an immense amount of overhead in ReGen, where strings were constantly
 ### ReGen's Adaptive Logic
 A look at the config file or ReGen's logic will reveal a "retain_counter". What this is for is to keep track of the amount of times a mutation did not result in an increase in benignity. 
 Once this passes a config-defined threshold (retain_threshold), the variant will undergo a certain amount of random mutations, and the highest-scoring one is allowed to pass on under a more lenient error threshold.
-The threshold decreases as retain-count increases, becoming more lenient the more the variant demonstrates ridigity. This, combined with the stochastic mutations is designed to break through plateaus in performance, finding the mutation route around it. I would recommend setting this to 1, but you can leave it at 3 to see how it works once a plateau is hit.
+The threshold decreases as retain-count increases, becoming more lenient the more the variant demonstrates ridigity. This, combined with the stochastic mutations is designed to break through plateaus in performance, finding the mutation route around it.
 
 
 ## [2] Installation and Workflow
@@ -192,6 +218,7 @@ from a01_KeyStone import KeyStone
 from a03_LookingGlass import LookingGlass
 from a04_ReGen import ReGen
 
+model_name = "TestRun_Model"
 # all functions with a name guard need to be called alone
 
 # [1] sourced data extraction and processing
@@ -217,6 +244,7 @@ def keystone_extract_proteins(model = model_name):
         raise
 
 def ks_dna_profile(model = model_name):
+    # 14 minutes
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
@@ -248,6 +276,19 @@ def ks_dnamotif_profile(model = model_name):
                 print("[PWM Profile Completed]")
     except Exception as e:
         print(f"PWM Fingerprint Generation Failed: {e}")
+        raise
+
+
+def ks_domain_profile(model = model_name):
+    # 1:50 hours
+    test = KeyStone(model)
+    try:
+        if __name__ == "__main__":
+            success  = test.generate_hmm_profile()
+            if success:
+                print("[HMM-domain Profile Completed]")
+    except Exception as e:
+        print(f"HMM-domain Fingerprint Generation Failed: {e}")
         raise
 
 def ks_aamotif_profile(model = model_name):
@@ -290,32 +331,55 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
     if __name__ == "__main__":
         module = ReGen(pathogenic_gene_file, ml_model, outfile_name)
         module.repair()
-
 ```
 
 
-## [2.1] Current Model Stats - ReGen_v4
-```
-Model: ReGen_v4
+## [2.1] Model Stats: Clinical and Discriminator
+After conducting several hyperparameter runs I noticed that two configurations gave me peaks in performance for different use cases.
+Both models use identical feature sets but the difference is in XGBoost hyperparams. optimized via Optuna (settings in stats.txt files)
 
-Cross Validation Results: Mean ROC AUC: 0.8920, Mean PR AUC: 0.8874
-Mean FNs: 5478.60, Mean FPs: 5833.60
-ROC AUC: 0.8939
-Precision-Recall AUC: 0.8900
-Pathogenic F1-Score: 0.7995  <-- basically 0.800 :)
-Optimal threshold for pathogenic detection: 0.480
+```
+[[ClinicalModel]] - this model possesses the lowest test-set False Negatives while retaining high-performance metrics
+It's greater sensitivity to pathogenic variants == greater relevancy for use in clinical tasks
+
+Cross Validation Results: Mean ROC AUC: 0.8980, Mean PR AUC: 0.8932
+Mean FNs: 5499.40, Mean FPs: 5386.00
+ROC AUC: 0.8999  
+Precision-Recall AUC: 0.8960
+Pathogenic F1-Score: 0.8050
+Optimal threshold for pathogenic detection: 0.507
 Performance with optimal threshold:
               precision    recall  f1-score   support
 
-           0       0.84      0.82      0.83     41774
-           1       0.79      0.81      0.80     34814
+           0       0.84      0.83      0.83     41774
+           1       0.80      0.81      0.81     34814
 
     accuracy                           0.82     76588
-   macro avg       0.81      0.82      0.81     76588
+   macro avg       0.82      0.82      0.82     76588
 weighted avg       0.82      0.82      0.82     76588
 Confusion Matrix:
-[[34247  7527]
- [ 6586 28228]]
+[[34572  7202]
+ [ 6491 28323]]
+
+[[DiscriminatorModel]] - highest discrimination power, FN and FP are almost perfectly balanced while AUC and other metrics are greatest
+Cross Validation Results: Mean ROC AUC: 0.8985, Mean PR AUC: 0.8938
+Mean FNs: 5411.20, Mean FPs: 5466.60
+ROC AUC: 0.9003
+Precision-Recall AUC: 0.8967
+Pathogenic F1-Score: 0.8059
+Optimal threshold for pathogenic detection: 0.496
+Performance with optimal threshold:
+              precision    recall  f1-score   support
+
+           0       0.84      0.84      0.84     41774
+           1       0.81      0.81      0.81     34814
+
+    accuracy                           0.82     76588
+   macro avg       0.82      0.82      0.82     76588
+weighted avg       0.82      0.82      0.82     76588
+Confusion Matrix:
+[[35023  6751]
+ [ 6747 28067]]
 ```
 
 
@@ -347,62 +411,56 @@ CTGCTTGACGGCGGTGCTGGACCTGCAGCTCAGGTGGGCCCCTCACCCTCTGCCAGCGCTGCGTCT
 *LookingGlass output from the test gene file*
 ```
 Name,Predicted_Class,Prob_Benign,Prob_Pathogenic
-benchmarkgene1,1,0.026314199,0.9736858
-benchmarkgene2,1,0.031000197,0.9689998
+benchmarkgene1,1,0.024691403,0.9753086
+benchmarkgene2,1,0.027637959,0.97236204
 ```
 
 ## ReGen example Input and Results
-Note: Users need to insert a FASTA file of the same custom format in the ReGen_input folder
+Users need to insert a FASTA file of the same custom format in the ReGen_input folder
+**IMPORTANT NOTE** Due to substantial feature engineering improvements between versions, ReGen optimization runs changed significantly.
+Example below does not include benign-threshold variants as those were unable to be found with ReGen's current iteration, unlike previous versions.
+
+Results changed due to massive improvements and changes. Addition of regulatory disruption detections, domain boundary shifts and repeat instability patterns that were not detected in previous models are now present. This means that "easy" sequence changes that were thought to be benign are now correctly identified as potentially disruptive. The optimization algorithm must now navigate a more biologically realistic but more challenging mutation landscape to effectively reduce pathogenicity.
+Although functional, ReGen is still a work in progress and is more of a proof-of-concept more than a proper gene-repair algorithm.
+
 ```
 ================================================================================
-ReGen Analysis Results: ReGen_v4 | benchmark_fasta | benchmarkgene1
+ReGen Analysis Results: ClinicalModel | benchmark_fasta | benchmarkgene1
 ================================================================================
 
 ORIGINAL VARIANT STATS: 
 Ref Sequence: GCTGCTGGACCTGCC
 Alt Sequence: G
-Benign % chance: 2.631420
+Benign % chance: 2.469140
 
 ANALYSIS SUMMARY:
-|- Starting Score: 0.026314
+|- Starting Score: 0.024691
 |- Original Length: 15 bp
 |- Final Variants: 1
-|- Benign Threshold Variants: 1
-|- ReGen config: 50 iterations, 1 copies
+|- Benign Threshold Variants: 0
+|- ReGen config: 20 iterations, 1 copies
 
 MAX BENIGN VARIANTS PER ITERATION:
 --------------------------------------------------
-Score: 67.49681830406189 | Length: 3 bp
-Benign % increase: 64.86539840698242
+Score: 11.542880535125732 | Length: 3 bp
+Benign % increase: 9.073740243911743
    Sequence:
-    GTA
+    GTT
 
-Score: 71.39513492584229 | Length: 6 bp
-Benign % increase: 68.76371502876282
+Score: 22.84235954284668 | Length: 6 bp
+Benign % increase: 20.37321925163269
    Sequence:
-    GTATTA
+    GTTATC
 
 Note: Top performing genes from every iteration are listed here, I'm skipping the others as there was no improvement
 
 
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
-BENIGN THRESHOLD VARIANTS: <- these are the variants that surpassed user-defined threshold
---------------------------------------------------
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
-   Sequence:
-    TTA
-
 FINAL VARIANTS:
 --------------------------------------------------
-Score: 82.05875158309937 | Length: 3 bp
-Benign % increase: 79.4273316860199
+Score: 22.84235954284668 | Length: 6 bp
+Benign % increase: 20.37321925163269
    Sequence: 
-    TTA
+    GTTATC
 ```
 Multiple copies can be run simultaneously, I just personally chose to run with 1 for ease of debugging, as it was easier to keep track of the 1.
 More copies and iterations generally will get better results.

@@ -151,26 +151,6 @@ class CompositeProt:
         self.terminate_pool()
 
     # ====[[MUTATION FINGERPRINT]]====
-    def gen_AAseqs(self, dataframe):
-        fingerprint_rows = [
-            (row['Chromosome'], row['ReferenceAlleleVCF'],
-             row['AlternateAlleleVCF'], row['Flank_1'], row['Flank_2'])
-            for _, row in dataframe.iterrows()
-        ]
-
-        fingerprint_rows = list(tqdm(
-            CompositeProt._pool.imap(self.AA_finder_wrapper, fingerprint_rows),
-            total=len(fingerprint_rows),
-            desc="[Extracting highest prob. AA sequences]"
-        ))
-
-        fingerprint_df = pd.DataFrame(fingerprint_rows)
-        fingerprint_df = pd.concat([dataframe.reset_index(drop=True), fingerprint_df],
-                                   axis=1)  # axis = 1 to concatenate column wise (side by side)
-
-        # don't drop anything, we want to keep clinical significance for future analyis
-        return fingerprint_df
-
     def gen_AAfp_dataframe(self, dataframe):
         """
         RUN THIS TO GET RETURN A FULL FINGERPRINT DATAFRAME
@@ -199,47 +179,6 @@ class CompositeProt:
              'Flank_2'], axis=1)
 
         return fingerprint_df
-
-    #   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    def AA_finder_wrapper(self, fp_row):
-        """
-        Finds most likely amino acid sequences to be made in both ref and alt strings - returns list and full string format
-        :param fp_row:
-        :return:
-        """
-        chromosome, ref_allele, alt_allele, flank_1, flank_2 = fp_row
-        config = global_config
-
-        buffered_ref = flank_1[config['aa_buffer']:] + ref_allele + flank_2[:config['aa_buffer']]
-        buffered_alt = flank_1[config['aa_buffer']:] + alt_allele + flank_2[:config['aa_buffer']]
-
-        optimal_ref, ref_orf_coordinates = self.gen_orf(buffered_ref)
-        optimal_alt, alt_orf_coordinates = self.gen_orf(buffered_alt)
-
-        # get DNA sequence most likely to be translated via intelligent ORF search
-        ref_sequence = (optimal_ref[ref_orf_coordinates[0]: ref_orf_coordinates[1]]).upper()
-        alt_sequence = (optimal_alt[alt_orf_coordinates[0]: alt_orf_coordinates[1]]).upper()
-
-        # get protein sequence as list, includes ambiguous cases as list of possible amino acids
-        ref_protein_list = self.protein_from_DNA(ref_sequence)
-        alt_protein_list = self.protein_from_DNA(alt_sequence)
-
-        # make it all into a string, replace ambiguous cases with the most likely / first amino acid
-        # - too computationally expensive to take into account ambiguous cases with these long sequences
-        non_ambiguous_ref = self.nonambi_prot(ref_protein_list)
-        non_ambiguous_alt = self.nonambi_prot(alt_protein_list)
-
-
-        AA_sequence_profile = {
-            'ref_protein_list': ref_protein_list,
-            'alt_protein_list': alt_protein_list,
-            'non_ambiguous_ref': non_ambiguous_ref,
-            'non_ambiguous_alt': non_ambiguous_alt,
-            'ref_protein_length': len(non_ambiguous_ref),
-            'alt_protein_length': len(non_ambiguous_alt),
-        }
-        return AA_sequence_profile
-
 
     def AA_fingerprinter_wrapper(self, fp_row):
         """
@@ -920,4 +859,65 @@ class CompositeProt:
         local_score = self.score_align(local1, local2, config)
 
         return local_score
+
+    # GENERATE MOST PROBABLE AMINO ACID SEQUENCES
+    def gen_AAseqs(self, dataframe):
+        fingerprint_rows = [
+            (row['Chromosome'], row['ReferenceAlleleVCF'],
+             row['AlternateAlleleVCF'], row['Flank_1'], row['Flank_2'])
+            for _, row in dataframe.iterrows()
+        ]
+
+        fingerprint_rows = list(tqdm(
+            CompositeProt._pool.imap(self.AA_finder_wrapper, fingerprint_rows),
+            total=len(fingerprint_rows),
+            desc="[Extracting highest prob. AA sequences]"
+        ))
+
+        fingerprint_df = pd.DataFrame(fingerprint_rows)
+        fingerprint_df = pd.concat([dataframe.reset_index(drop=True), fingerprint_df],
+                                   axis=1)  # axis = 1 to concatenate column wise (side by side)
+
+        # don't drop anything, we want to keep clinical significance for future analyis
+        return fingerprint_df
+
+
+    def AA_finder_wrapper(self, fp_row):
+        """
+        Finds most likely amino acid sequences to be made in both ref and alt strings - returns list and full string format
+        :param fp_row:
+        :return:
+        """
+        chromosome, ref_allele, alt_allele, flank_1, flank_2 = fp_row
+        config = global_config
+
+        buffered_ref = flank_1[config['aa_buffer']:] + ref_allele + flank_2[:config['aa_buffer']]
+        buffered_alt = flank_1[config['aa_buffer']:] + alt_allele + flank_2[:config['aa_buffer']]
+
+        optimal_ref, ref_orf_coordinates = self.gen_orf(buffered_ref)
+        optimal_alt, alt_orf_coordinates = self.gen_orf(buffered_alt)
+
+        # get DNA sequence most likely to be translated via intelligent ORF search
+        ref_sequence = (optimal_ref[ref_orf_coordinates[0]: ref_orf_coordinates[1]]).upper()
+        alt_sequence = (optimal_alt[alt_orf_coordinates[0]: alt_orf_coordinates[1]]).upper()
+
+        # get protein sequence as list, includes ambiguous cases as list of possible amino acids
+        ref_protein_list = self.protein_from_DNA(ref_sequence)
+        alt_protein_list = self.protein_from_DNA(alt_sequence)
+
+        # make it all into a string, replace ambiguous cases with the most likely / first amino acid
+        # - too computationally expensive to take into account ambiguous cases with these long sequences
+        non_ambiguous_ref = self.nonambi_prot(ref_protein_list)
+        non_ambiguous_alt = self.nonambi_prot(alt_protein_list)
+
+
+        AA_sequence_profile = {
+            'ref_protein_list': ref_protein_list,
+            'alt_protein_list': alt_protein_list,
+            'non_ambiguous_ref': non_ambiguous_ref,
+            'non_ambiguous_alt': non_ambiguous_alt,
+            'ref_protein_length': len(non_ambiguous_ref),
+            'alt_protein_length': len(non_ambiguous_alt),
+        }
+        return AA_sequence_profile
 

@@ -412,6 +412,7 @@ class KeyStone:
         # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=175)
         # best_params = study.best_params
 
+        # These are previous hyperparam settings that gave highest performance
         best_params = {'n_estimators': 1991,
                        'max_depth': 10,
                        'learning_rate': 0.048315714286293394,
@@ -423,6 +424,30 @@ class KeyStone:
                        'gamma': 0.34483645155447473,
                        'min_child_weight': 19,
                        'scale_pos_weight': 1.803931441549998}
+
+        # best_params = {'n_estimators': 1674,
+        #                'max_depth': 10,
+        #                'learning_rate': 0.034561112430304776,
+        #                'subsample': 0.9212141915845736,
+        #                'colsample_bytree': 0.6016405698933265,
+        #                'colsample_bylevel': 0.9329109895929816,
+        #                'reg_alpha': 0.7001202050122113,
+        #                'reg_lambda': 3.1671750288760134,
+        #                'gamma': 1.0033930419124446,
+        #                'min_child_weight': 9,
+        #                'scale_pos_weight': 1.6075244983571118}
+
+        # best_params = {'n_estimators': 1677,
+        #                'max_depth': 10,
+        #                'learning_rate': 0.039293549864997175,
+        #                'subsample': 0.9969933786793387,
+        #                'colsample_bytree': 0.6482133739319931,
+        #                'colsample_bylevel': 0.6039302725209573,
+        #                'reg_alpha': 0.46607769424421325,
+        #                'reg_lambda': 3.441382674128201,
+        #                'gamma': 0.28487791075581864,
+        #                'min_child_weight': 2,
+        #                'scale_pos_weight': 1.6355990026202318}
 
         self.evaluate_save(best_params, X_train, y_train, X_test, y_test)
 
@@ -444,7 +469,7 @@ class KeyStone:
             X_tr, X_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
             y_tr, y_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
 
-            model.fit(X_tr, y_tr, eval_set=[(X_val, y_val)])
+            model.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=False)
             y_pred_proba = model.predict_proba(X_val)[:, 1]
 
             precision, recall, thresholds = precision_recall_curve(y_val, y_pred_proba, pos_label=1)
@@ -466,7 +491,7 @@ class KeyStone:
 
         # Train on full data and evaluate on test set
         print("Full Data Run...")
-        model.fit(X_train, y_train, eval_set=[(X_test, y_test)])
+        model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
         y_pred_proba = model.predict_proba(X_test)[:, 1]
 
         # Calculate F1 specifically for pathogenic class

@@ -313,7 +313,7 @@ class CompositeDNA:
         fp["FI_Mutation_composite"] = (
             fp["Tandem_Duplications"]
             + fp["Hairpins"]
-            + fp["Repeat_instability_score"]
+            + fp["tr_base_composite"]
             + fp["Poly_tracts"]
             + fp["SNVs"]
             + fp["Insertion_length"]
@@ -413,17 +413,11 @@ class CompositeDNA:
         # Duplications
         # Tandem Duplications
         # Microsatellites
-        tr_loss, tr_gain, tr_delta, tr_composite, repeat_instab_score = self.repeat_instab(ref_buffered, alt_buffered, ref_kmer_freqs, alt_kmer_freqs, config)
 
         flanked_fp = {
             # 1 - Mutations / structure changes
             'Tandem_Duplications': self.duplication_delta(ref_buffered, alt_buffered, config),
             'Hairpins': self.hairpin_count_delta(ref_buffered, alt_buffered),
-            'TR_Loss': tr_loss,
-            'TR_Gain': tr_gain,
-            'TR_Delta': tr_delta,
-            'TRepeat_Composite': tr_composite,
-            'Repeat_instability_score': repeat_instab_score,
 
             # 2 - start and stop codons gain / loss
             'Start_codons': self.start_delta(ref_buffered, alt_buffered),
@@ -436,11 +430,13 @@ class CompositeDNA:
             'Poly_tracts': self.poly_tract_delta(ref_buffered, alt_buffered)
         }
 
+        flanked_fp.update(self.repeat_instab(ref_buffered, alt_buffered, ref_kmer_freqs, alt_kmer_freqs, config))
+
         # 2 Feature Interactions
         flanked_fp["FI_Mutation_propensity"] = (
             flanked_fp["Tandem_Duplications"]
             + flanked_fp["Hairpins"]
-            + flanked_fp["Repeat_instability_score"]
+            + flanked_fp["tr_base_composite"]
             + flanked_fp["Poly_tracts"]
         )
         return flanked_fp
@@ -981,7 +977,7 @@ class CompositeDNA:
         :param glb_ori_kmer_freqs:
         :param glb_muta_kmer_freqs:
         :param config:
-        :return: # repeats_lost, repeats_gained, microsat_delta, composite, repeat_instab_score
+        :return: repeat instability profile -> add this as a dictionary
         """
         if not glb_ori_kmer_freqs or not glb_muta_kmer_freqs:
             return 0, 0, 0, 0, 0
@@ -1016,8 +1012,6 @@ class CompositeDNA:
         for tr in shared_trs:
             composite += sum(muta_sats[tr]) - sum(orig_sats[tr])
 
-        repeat_instab = len(repeats_lost) + len(repeats_gain) + microsat_delta + composite
-
         # in case something goes wrong, uncomment this
         # print(f"len_repeats_lost: {len(repeats_lost)}")
         # print(f"len_repeats_gain: {len(repeats_gain)}")
@@ -1025,7 +1019,14 @@ class CompositeDNA:
         # print(f"composite: {composite}")
         # print(f"repeat_instab: {repeat_instab}")
 
-        return len(repeats_lost), len(repeats_gain), microsat_delta, composite, repeat_instab
+        microsat_dict = {
+            "tr_base_composite": composite,
+            "Microsat_delta": microsat_delta,
+        }
+
+        microsat_dict.update(self.repeat_instab_data(repeats_lost, repeats_gain, shared_trs, orig_sats, muta_sats))
+
+        return microsat_dict
 
     # helper function for microsatellite detection
     @staticmethod
@@ -1051,6 +1052,77 @@ class CompositeDNA:
         # {"CGGGA": [20, 21, 39, 80]}
 
         return satellites
+
+    @staticmethod
+    def repeat_instab_data(repeats_lost, repeats_gain, shared_trs, orig_sats, muta_sats):
+        """
+        Repeat instability should reflect how much the repeat landscape has changed in a biologically meaningful way
+        \ncomplete loss / gain of repeat loci are weighted highest -> multiplied by their length
+        \ntotal bp changes for lost/gained loci
+        \nmeasure expansion or contraction within shared repeats
+        \nweigh by repeat unit size
+        :return:
+        """
+        # loci changes
+        loci_lost = len(repeats_lost)
+        loci_gain = len(repeats_gain)
+
+        # total bp changes
+        bp_lost = sum(sum(orig_sats[tr]) for tr in repeats_lost)
+        bp_gain = sum(sum(muta_sats[tr]) for tr in repeats_gain)
+
+        # weighted data by repeat unit type
+        wbp_lost = sum(sum(orig_sats[tr]) * len(tr) for tr in repeats_lost)
+        wbp_gain = sum(sum(muta_sats[tr]) * len(tr) for tr in repeats_gain)
+
+        # expansion and contraction scores
+        expansion_score = 0
+        contraction_score = 0
+
+        w_expansion_score = 0
+        w_contraction_score = 0
+
+        for tr in shared_trs:
+            orig_total_bp = sum(orig_sats[tr])
+            muta_total_bp = sum(muta_sats[tr])
+            bp_delta = muta_total_bp - orig_total_bp
+
+            if bp_delta > 0:
+                expansion_score += bp_delta
+                w_expansion_score += bp_delta * len(tr)
+            else:
+                contraction_score += abs(bp_delta)
+                w_contraction_score += abs(bp_delta) * len(tr)
+
+        # get other scores ready
+        simple_score = bp_lost + bp_gain + expansion_score + contraction_score
+        w_simple_score = wbp_lost + wbp_gain + w_expansion_score + w_contraction_score
+
+        composite_score = (loci_lost + loci_gain) + w_simple_score
+
+        return {
+            'tr_loci_lost': loci_lost,
+            'tr_loci_gain': loci_gain,
+            'tr_bp_gain': bp_gain,
+            'tr_bp_loss': bp_lost,
+            'tr_expansion_score': expansion_score,
+            'tr_contraction_score': contraction_score,
+
+            # weighted scores
+            'tr_weighted_bploss': wbp_lost,
+            'tr_weighted_bpgain': wbp_gain,
+            'tr_weighted_expansion_score': w_expansion_score,
+            'tr_weighted_contraction_score': w_contraction_score,
+
+            # scores
+            # 'tr_simple_score': simple_score,  # test run without these scores
+            # 'tr_weighted_score': w_simple_score,
+            'tr_composite_score': composite_score,
+        }
+
+
+
+
 
     def start_delta(self, br_original, br_mutation):
         """

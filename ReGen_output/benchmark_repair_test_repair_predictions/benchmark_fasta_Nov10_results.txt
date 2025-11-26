@@ -1,0 +1,75 @@
+================================================================================
+ReGen Analysis Results: Nov10 | benchmark_fasta | benchmarkgene1
+================================================================================
+
+ORIGINAL VARIANT STATS: 
+Ref Sequence: GCTGCTGGACCTGCC
+Alt Sequence: G
+Benign % chance: 2.356327
+
+ANALYSIS SUMMARY:
+|- Starting Score: 0.023563
+|- Original Length: 15 bp
+|- Final Variants: 1
+|- Benign Threshold Variants: 0
+|- ReGen config: 10 iterations, 1 copies
+
+MAX BENIGN VARIANTS PER ITERATION:
+--------------------------------------------------
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence:
+    GTC
+
+FINAL VARIANTS:
+--------------------------------------------------
+Score: 30.35678267478943 | Length: 3 bp
+Benign % increase: 28.00045609474182
+   Sequence: 
+    GTC
+

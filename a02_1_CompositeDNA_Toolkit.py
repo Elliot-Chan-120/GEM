@@ -1252,7 +1252,6 @@ class CompositeDNA:
         # state determination + boundary composite scores
         base_dict.update(self.state_stats(vtbi_seq1, vtbi_seq2, flank_length))
 
-
         return base_dict
 
     def opt_viterbi(self, sequence):

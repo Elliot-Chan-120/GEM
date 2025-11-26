@@ -412,7 +412,7 @@ class KeyStone:
         # study.optimize(lambda trial: self.objective(trial, X_train, y_train, scale_pos_weight), n_trials=175)
         # best_params = study.best_params
 
-        # These are previous hyperparam settings that gave highest performance
+        # These are previous hyperparam settings that gave highest performances, keeping them here just in case
         best_params = {'n_estimators': 1991,
                        'max_depth': 10,
                        'learning_rate': 0.048315714286293394,

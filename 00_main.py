@@ -118,4 +118,4 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
 
 
 # [ Command ]
-LookingGlass_Demo()
+Repair_Gene()

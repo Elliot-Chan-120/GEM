@@ -50,3 +50,22 @@ Added two PWM-based scoring modules employing cluster-disruption algorithms and 
 - Integrated with translation likelihood calculations for coordinate-independent analyses
 
 Refer to README.md for a more thorough breakdown.
+
+11/26/2025 GEM v3.0.0
+### Major Additions
+**Hidden Markov Model (HMM) Analysis Module**: A new multi-scale genomic domain & state composition tracker
+- Viterbi algorithm implementation for optimal state path detection across 6 genomic domains
+- Multi-scale analysis (0.5x, 1x, 2x) for close and broad range domain disruption proximity
+- Gaussian-weighted boundary scoring to quantify variant impact on regulatory domains
+
+**DataSift Integration**: Intelligent data quality control pipeline
+- Optimized variance filtering and backwards iterations for importance-based feature removal
+- Generates the optimal combination of features for binary classifiers to train on
+
+**Repeat Instability Analysis**: overhaul from microsatellite detection
+- Comprehensive tandem repeat tracking with biological weighting
+- Quantifies repeat loci gains and losses as well as contractions and expansions
+- Base-pair level change tracking weighted by repeat unit sizes
+- Composite scoring captures synergistic repeat disruption patterns
+
+Note: HMM parameters were calibrated to human genomic base composition by domain

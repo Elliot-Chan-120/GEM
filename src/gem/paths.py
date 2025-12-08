@@ -18,6 +18,9 @@ DATABASE = PROJECT_ROOT / "database"
 GENE_DATABANK = PROJECT_ROOT / "gene_databank"
 REGEN_CANDIDATES = PROJECT_ROOT / "ReGen_candidates"
 SCREEN_RESULTS = PROJECT_ROOT / "Screen_results"
+DATASIFT_CONFIGS = PROJECT_ROOT / "DataSift_configs"
+CONFIG = PROJECT_ROOT / "config.yaml"
+MODEL_FOLDER = PROJECT_ROOT / "model_folder"
 
 # =====================
 # embedded directories
@@ -52,11 +55,7 @@ FULL_VARIANT_DF = DATABASE / "VARIANT_df.pkl"
 # blosum matrix
 BLOSUM62 = DATABASE / "blosum62.mat"
 
-# =====================
-# gem root directory
-# =====================
-DATASIFT_CONFIGS = GEM_ROOT / "DataSift_configs"
-MODEL_FOLDER = GEM_ROOT / "model_folder"
-CONFIG = GEM_ROOT / "config.yaml"
+
+
 
 

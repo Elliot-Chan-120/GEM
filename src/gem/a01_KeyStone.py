@@ -25,7 +25,7 @@ from src.gem.a02_3_DNAMatrix_Toolkit import DNAMatrix
 from src.gem.a02_4_ProtMatrix_Toolkit import ProtMatrix
 
 # DataSift
-from DataSift import DataSift, SiftControl
+from src.gem.DataSift import DataSift, SiftControl
 
 # paths
 from src.gem.paths import *

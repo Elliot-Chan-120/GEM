@@ -5,7 +5,7 @@ from src.gem.a02_2_CompositeProt_Toolkit import CompositeProt
 from src.gem.a02_3_DNAMatrix_Toolkit import *
 from src.gem.a02_4_ProtMatrix_Toolkit import *
 from src.gem.b01_utility import custom_parse
-from DataSift import *
+from src.gem.DataSift import *
 
 from src.gem.paths import *
 

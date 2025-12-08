@@ -4,7 +4,7 @@ import random
 from src.gem.a03_LookingGlass import *
 from src.gem.b00_bio_library import ALL_AA_COMBINATIONS
 from src.gem.b01_utility import custom_parse
-from DataSift import *
+from src.gem.DataSift import *
 
 from src.gem.paths import *
 

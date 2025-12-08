@@ -113,8 +113,8 @@ def LookingGlass_Demo(ml_model=model_name, genefile='benchmark.fasta', output_fi
 
 def Repair_Gene(ml_model=model_name, pathogenic_route='benchmark.fasta', outfile_name='benchIDE_repaired'):
     if __name__ == "__main__":
-        module = ReGen(ml_model, pathogenic_route, outfile_name)
+        module = ReGen(ml_model, pathogenic_route, outfile_name, iterations=1)
         module.repair()
 
 # [Commands]
-keystone_dataframe_processing()
+Repair_Gene()

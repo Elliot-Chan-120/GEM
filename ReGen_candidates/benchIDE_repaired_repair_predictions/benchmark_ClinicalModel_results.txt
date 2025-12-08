@@ -1,0 +1,30 @@
+================================================================================
+ReGen Analysis Results: ClinicalModel | benchmark | benchmarkgene1
+================================================================================
+
+ORIGINAL VARIANT STATS: 
+Ref Sequence: GCTGCTGGACCTGCC
+Alt Sequence: G
+Benign % chance: 2.469140
+
+ANALYSIS SUMMARY:
+|- Starting Score: 0.024691
+|- Original Length: 15 bp
+|- Final Variants: 1
+|- Benign Threshold Variants: 0
+|- ReGen config: 1 iterations, 1 copies
+
+MAX BENIGN VARIANTS PER ITERATION:
+--------------------------------------------------
+Score: 11.542880535125732 | Length: 3 bp
+Benign % increase: 9.073740243911743
+   Sequence:
+    GTT
+
+FINAL VARIANTS:
+--------------------------------------------------
+Score: 11.542880535125732 | Length: 3 bp
+Benign % increase: 9.073740243911743
+   Sequence: 
+    GTT
+

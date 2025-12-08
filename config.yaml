@@ -1,43 +1,4 @@
 # ==================================
-# Navigation
-# ==================================
-
-model_folder: 'model_folder'
-database_folder: 'database'
-datacore_folder: 'datacore'
-pwm_folder: 'pwm_database'
-dna_motifs: 'DNA_motifs'
-aa_motifs: 'AA_motifs'
-gene_databank: 'gene_databank'
-screen_predictions: 'Screen_results'
-
-# DATABASE FILES
-clinvar_data: variant_summary.txt.gz
-GRCh38_gz: GCF_000001405.40_GRCh38.p14_genomic.fna.gz
-GRCh38_txt: GCF_000001405.40_GRCh38.p14_assembly_report.txt
-GRCh38_fna: GCF_000001405.29_GRCh38.p14_genomic.fna
-
-# USER GENERATED FILES FOR ML TRAINING
-ref_alt_df: REF_ALT_df
-context_df: CONTEXT_ref_alt_df
-
-# Composite df - passed on to composite classes and pwm profiler for downstream analysis
-composite_df: CompositeDF
-
-# DNA dataframe
-dna_profile: DNA_profile_df
-
-# Prot dataframe
-prot_profile: PROT_profile_df
-
-# PWM dataframes
-dna_pwm_profile: DNAPWM_profile_df
-aa_pwm_profile: AAPWM_profile_df
-
-full_variant_df: VARIANT_df
-
-
-# ==================================
 # DataFrame generation settings
 # ==================================
 # context / flanksize settings -> determines how much of the full sequence you want added on to each variant
@@ -87,22 +48,25 @@ motif_search_radius: 150  # reasonable length
 dna_cluster_distance: 50  # base pairs
 aa_cluster_distance: 30   # amino acids
 
+# [HMM window search settings]
+hmm_window: 200
+
 
 # ==================================
 # LookingGlass Settings
 # ==================================
-optimal_threshold: 0.513  # this is your trained model's optimal threshold, it is output at the end of model training
+optimal_threshold: 0.507  # this is your trained model's optimal threshold, it is output at the end of model training
 
 # ==================================
 # Regen Settings
 # ==================================
-n_iterations: 50
+n_iterations: 5
 n_copies: 1
 decrease_threshold: -0.1
 retain_threshold: 1
-random_choices: 40
+random_choices: 120
 benign_goal: 0.75   # what % chance we want our resulting alleles to be Benign
-scale_factor: 0.1
+scale_factor: 0.3
 
 
 

@@ -1,6 +1,6 @@
-from a01_KeyStone import KeyStone
-from a03_LookingGlass import LookingGlass
-from a04_ReGen import ReGen
+from src.gem.a01_KeyStone import KeyStone
+from src.gem.a03_LookingGlass import LookingGlass
+from src.gem.a04_ReGen import ReGen
 
 model_name = "ClinicalModel"
 # all functions with a name guard need to be called alone
@@ -95,7 +95,7 @@ def keystone_merge(ml_modelname=model_name):
         if __name__ == "__main__":
             success = test.get_final_dataframe()
             if success:
-                print("[Fingerprint DataFrame Generation Completed]")
+                print("[FULL Mutation Fingerprint DataFrame Generation Completed]")
     except Exception as e:
         print(f"Mutation Fingerprint Generation Failed: {e}")
         raise
@@ -106,16 +106,15 @@ def keystone_model_training(ml_modelname=model_name):
     test = KeyStone(ml_modelname)
     test.train_models()
 
-def LookingGlass_Demo(fasta_filename='test.fasta', ml_model=model_name, output_filename='Screen_test_1'):
-    test_module = LookingGlass(fasta_filename, ml_model)
+def LookingGlass_Demo(ml_model=model_name, genefile='video_test.fasta', output_filename='video_screen_test'):
+    test_module = LookingGlass(ml_model, genefile)
     if __name__ == "__main__":
         test_module.predict_file(output_filename)
 
-def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, outfile_name='benchmark_repair_test'):
+def Repair_Gene(ml_model=model_name, pathogenic_route='video_test.fasta', outfile_name='video_test_results'):
     if __name__ == "__main__":
-        module = ReGen(pathogenic_gene_file, ml_model, outfile_name)
+        module = ReGen(ml_model, pathogenic_route, outfile_name)
         module.repair()
 
-
-# [ Command ]
-Repair_Gene()
+# [Commands]
+LookingGlass_Demo()

@@ -1,0 +1,62 @@
+================================================================================
+ReGen Analysis Results: ClinicalModel | video_test | fakegene1
+================================================================================
+
+ORIGINAL VARIANT STATS: 
+Ref Sequence: G
+Alt Sequence: TCTCGA
+Benign % chance: 5.358243
+
+ANALYSIS SUMMARY:
+|- Starting Score: 0.053582
+|- Original Length: 1 bp
+|- Final Variants: 1
+|- Benign Threshold Variants: 2
+|- ReGen config: 5 iterations, 1 copies
+
+MAX BENIGN VARIANTS PER ITERATION:
+--------------------------------------------------
+Score: 42.896026372909546 | Length: 7 bp
+Benign % increase: 37.53778338432312
+   Sequence:
+    TCTCGAT
+
+Score: 66.1547601222992 | Length: 10 bp
+Benign % increase: 60.79651713371277
+   Sequence:
+    TCTCGATTCT
+
+Score: 81.73173069953918 | Length: 13 bp
+Benign % increase: 76.37348771095276
+   Sequence:
+    TCTCGATTCTCAC
+
+Score: 84.92496013641357 | Length: 16 bp
+Benign % increase: 79.56671714782715
+   Sequence:
+    TCTCGATTCTCACACG
+
+Score: 84.92496013641357 | Length: 16 bp
+Benign % increase: 79.56671714782715
+   Sequence:
+    TCTCGATTCTCACACG
+
+BENIGN THRESHOLD VARIANTS:
+--------------------------------------------------
+Score: 81.73173069953918 | Length: 13 bp
+Benign % increase: 76.37348771095276
+   Sequence:
+    TCTCGATTCTCAC
+
+Score: 84.92496013641357 | Length: 16 bp
+Benign % increase: 79.56671714782715
+   Sequence:
+    TCTCGATTCTCACACG
+
+FINAL VARIANTS:
+--------------------------------------------------
+Score: 84.92496013641357 | Length: 16 bp
+Benign % increase: 79.56671714782715
+   Sequence: 
+    TCTCGATTCTCACACG
+

@@ -106,15 +106,15 @@ def keystone_model_training(ml_modelname=model_name):
     test = KeyStone(ml_modelname)
     test.train_models()
 
-def LookingGlass_Demo(ml_model=model_name, genefile='video_test.fasta', output_filename='video_screen_test'):
+def LookingGlass_Demo(ml_model=model_name, genefile='benchmark.fasta', output_filename='benchIDE_repaired'):
     test_module = LookingGlass(ml_model, genefile)
     if __name__ == "__main__":
         test_module.predict_file(output_filename)
 
-def Repair_Gene(ml_model=model_name, pathogenic_route='video_test.fasta', outfile_name='video_test_results'):
+def Repair_Gene(ml_model=model_name, pathogenic_route='benchmark.fasta', outfile_name='benchIDE_repaired'):
     if __name__ == "__main__":
         module = ReGen(ml_model, pathogenic_route, outfile_name)
         module.repair()
 
 # [Commands]
-LookingGlass_Demo()
+keystone_dataframe_processing()

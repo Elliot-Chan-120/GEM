@@ -1,6 +1,5 @@
 # Navigation help
 import yaml
-from pathlib import Path
 from src.gem.paths import *
 
 # math
@@ -17,7 +16,6 @@ import multiprocessing
 
 # initialize biological structure libraries
 from src.gem.b00_bio_library import *
-
 from src.gem.paths import PROJECT_ROOT
 
 # initialize biological structure libraries

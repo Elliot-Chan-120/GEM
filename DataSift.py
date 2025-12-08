@@ -356,7 +356,7 @@ class SiftControl:
         self.filepath = self.folder_path / f"{model_name}.json"
         try:
             file_size = self.filepath.stat().st_size
-            print(f"{file_size}")
+            print(f"Loading {model_name} Sift: {file_size} bytes")
         except FileNotFoundError:
             print(f"Error: File not found at {self.filepath}")
 

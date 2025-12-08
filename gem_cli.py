@@ -1,13 +1,13 @@
 import argparse
 import sys
-from pathlib import Path
 
 from src.gem.a03_LookingGlass import LookingGlass
 from src.gem.a04_ReGen import ReGen
+from src.gem.paths import *
 
 def validate_fasta(filepath, flag):
     path = Path(filepath)
-    gene_databank_path = Path('gene_databank') / path
+    gene_databank_path = GENE_DATABANK / path
 
     if path.exists():
         return str(path)
@@ -91,20 +91,7 @@ def entry_point():
             output == output filename
         
         Command List:
-            # example full command, default model
-            GEM screen/repair test.fasta output_test.fasta
-        
-            # Screen Variants w/ Clinical Model (default)
-            gem screen my_variants.fasta -Note: my_variants.fasta must be in gene_databank!
-            
-            # Screen w/ discriminator model
-            gem screen my_variants.fasta --model discmod
-            
-            # Repair pathogenic variants w/ 50 iterations
-            gem repair pathogenic.fasta --iterations 50
-            
-            # Repair with multiple parallel copies for better results
-            gem repair pathogenic.fasta --model --iterations 30 --copies 5 --output nonpathogenic
+            will fill this out after mentally recovering
         """,
     )
 

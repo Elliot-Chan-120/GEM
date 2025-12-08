@@ -6,7 +6,7 @@ from src.gem.b00_bio_library import ALL_AA_COMBINATIONS
 from src.gem.b01_utility import custom_parse
 from DataSift import *
 
-
+from src.gem.paths import *
 
 class ReGen:
     def __init__(self, ml_model, pathogenic_route, outfile_name,

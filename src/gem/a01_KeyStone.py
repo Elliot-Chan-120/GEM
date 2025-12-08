@@ -2,12 +2,11 @@
 import gzip
 import pickle as pkl
 import os
-from urllib.error import ContentTooShortError
 
 import pandas as pd
 import numpy as np
 import yaml
-import tqdm
+from tqdm import tqdm
 
 # ML stuff
 from xgboost import XGBClassifier

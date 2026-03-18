@@ -23,177 +23,7 @@ It includes:
 - *ReGen*: Performs a combination of guided edits to increase the likelihood of benign classification, with intelligently placed stochastic mutations to escape performance plateaus
 
 
-## [1] Technical Peek into GEM's Architecture
-**KeyStone: Integrating Database Querying, Bioinformatics Analyses and ML pipelines**
-
-*Extracts genomic context, generates both DNA and Protein-based biochemical + structural features, and trains optimized models for clinical variant interpretation*
-  - Data processing
-    - Quality Filtering: removes uncertain classifications and focuses on high-confidence Benign/Pathogenic variants
-    - Context Extraction: configurable flanking sequence windows around variants
-  - Feature Engineering is done through classes CompositeDNA, CompositeProt, DNAMatrix and ProtMatrix, elaborated on below
-  - Machine Learning Optimization and Evaluation
-    - XGB classifiers undergo Optuna hyperparameter tuning (pre-computed optimal settings provided in pipeline)
-    - Stratified k-fold validation, weighted sampling, threshold optimization
-    - ROC-AUC, PR-AUC, F1-scores, Confusion Matrices, and Reports on trained model provided in model_folder
-
-\
-**CompositeDNA: High-performance comprehensive DNA Analysis**
-
-*Conducts thorough DNA analyses to build a numerical profile on the following features:*
-- Sequence Alignment and Comparison
-  - Needleman-Wunsch global alignment, Smith-Waterman local alignment, Sequence identity and Coverage metrics
-- Structural Analysis
-  - Chromosome density
-  - Length changes
-  - Thermodynamic stability analysis using nearest-neighbour parameters
-  - GC content and CpG island disruption analysis 
-  - Shannon entropy for sequence complexity
-  - Hairpin structure prediction
-  - Intron detections
-- Mutation Detection
-  - SNV (Single Nucleotide Variant) identification
-  - Insertion / Deletion analysis with frameshift detection
-  - Tandem duplication discovery
-- Regulatory Element Analysis
-  - Transcription factor motif disruptions
-  - DNA instability motif analysis
-  - Start/stop codon changes
-
-\
-Most notable additions to CompositeDNA:
-
-**HMM Genomic Domain Analysis**
-
-*Predicts alterations to the genomic regulatory landscape through probabilistic state modeling*
-
-The HMM module translates DNA sequences into their optimized state paths using the Viterbi algorithm. From this optimized state path, it tracks:
-- **Domain Composition Shifts**: How variants change the proportion of coding, noncoding, regulatory, transcribable domains
-- **State Transition Disruptions**: Detection of domain boundary changes, Gaussian decay-weighted by proximity to mutation sites
-- **Multi-Scale Monitoring**: Three analysis windows capture local and broad domain effects
-
-**Repeat Instability Analysis - (Enhanced Microsatellite Detection)**
-
-Goes beyond repeat counting to capture biological mechanisms like expansions, contractions, and slippage-mediated mutagenesis
-- **Loci Tracking**: detects complete loss and gain of repeat regions
-- **Expansion / Contraction**: quantifies bp changes within existing repeat loci
-- **Weighted Scoring**: larger repeat units weighted more heavily
-- **Composite Scoring**: Integrates multiple disruption types to capture synergistic effects
-
-
-\
-**CompositeProt: High-performance comprehensive Amino-Acid Chain / Protein Analysis**
-
-*Performs smart ORF detection to uncover the highest-probability protein sequence upon which the following features are extracted:*
-- Translation and ORF Detection
-  - Intelligent Open Reading Frame identification
-  - Kozak motif sequence and ORF length-based scoring for translation efficiency
-  - Bidirectional sequence analysis (accounts for reverse complement)
-  - Ambiguous nucleotide handling
-- Physicochemical Properties
-  - Molecular weight calculations
-  - Net charge at physiological pH
-  - Isoelectric point determination
-  - Hydrophobicity changes
-  - Aliphatic index
-  - Protein half-life predictions
-- Structural Analysis
-  - Secondary structure propensity analysis (BioPython-aided)
-  - Proline content assessment
-  - Global and local protein sequence alignment with BLOSUM64 matrix
-- Feature Interaction Engineering includes:
-  - Composite scores combining multiple properties
-  - Interaction terms (e.g. charge-hydrophobicity)
-  - Relative metrics normalized by protein length
-
-\
-**DNAMatrix - regulatory motif analysis**
-
-*Captures how variants disrupt DNA-level regulatory architecture through multi-dimensional scoring of transcriptional and post-transcriptional control.*
-
-Scans variety of motifs found in 3 regulatory domains: 
-
-- initiation signals: initiator, TATA box, Kozak Sequence
-- transcription factors: CTCF, CAAT, SP1, NF-kB, AP1, CREB
-- post-transcriptional regulatory elements: 5’/3’ splice sites, branch points, polyadenylation signals
-
-Each motif is scored using position-weight matrices with a Gaussian-weighted distance decay function that assigns higher impact to disruptions near the variant site. The module calculates three complementary metrics across individual motif, domain, and total DNA levels:
-
-- raw motif count changes
-- position-weighted score shifts
-- cluster composite scores to detect synergistic effects when multiple binding sites are disrupted within close proximity. The distance threshold is configurable (30bp default).
-
-By aggregating individual motif disruptions into domain-level cluster scores, the system identifies coordinated regulatory breakdowns that simple count-based methods would miss. 
-
-\
-**ProtMatrix - protein motif analysis**
-
-*Extends variant impact assessment to the protein level, analyzing amino acid changes and disruptions in post-translational modification sites and protein-protein interaction domains. Profiles four major regulatory systems:*
-
-- phosphorylation sites: CDK, cAMP-PKA, CK2, Tyrosine Kinase
-- glycosylation sites: N-glycosylation consensus sequences
-- ubiquitination signals: D-box, KEN-box degrons
-- interaction domains: SH2 family, 14-3-3 binding sites, pdz domains, nuclear localization and export signals
-
-Since protein sequences are extrapolated without genomic coordinates but from translation likelihood calculations, the module employs PWM scanning combined with regex pattern matching for canonical motifs. Similar cluster composite scoring is implemented, capturing the disruption of spatially clustered PTM sites or binding domains.
-
-\
-**ReGen: Therapeutic Optimization**
-
-*Utilizes a sophisticated algorithm system to optimize variants towards benign classification*
-- Guided Evolution: intelligent sequence optimization using both guided and stochastic mutations
-- Multi-copy evolution: configurable parallel optimization of multiple sequence variants for balance between exploration / exploitation
-- Adaptive strategy: switches between guided and random mutations based on optimization progress
-- Comprehensive tracking: monitors the best variants per iteration and threshold-crossing variants
-
-
-## [1.1] Design Rationale
-### Why XGB
-XGB models were chosen due to being tree-based and faring well under non-linear high-dimensional data. I found them to be faster to train than RandomForest, speaking from (hours of) experience.
-
-### Context Matters 
-The problem with ClinVar's data on its own is that for a project like this, the ref and alt allele vcfs (variant sequences) alone are not sufficient to make accurate predictions of pathogenicity.
-Surrounding context is highly significant in understanding the impact a mutation has. One simple insertion / deletion can shift a reading frame and drastically alter the resulting protein.
-Therefore, cross-referencing ClinVar variant location data with GCF assembly and complete FASTA to obtain a configurable amount of flanking context sequences was the optimal choice. 
-
-### Protein Analysis Strategy 
-Protein analysis was a big hurdle, as I had find a way to balance processing power with biological accuracy. For every string of DNA (above a certain size), there are 6 ways to read and translate proteins from it, along what we call Reading Frames. Each reading frame usually contains multple Open Reading Frames (ORFs), characterized by start and stop codons, which is where the proteins actually get made.
-Naive approaches to analyzing the protein level would involve brute-force scanning of all 6 reading frames, then scanning for all possible ORFs, extracting all sequences, then conducting analyses on all of them then doing that again for variant comparison. So there's 6 RFs, most likely multiple ORFs in each, and we probably have to compare the average of those results between 2 sequences 380k+ times. This would, at best, nuke my computer. The solution to this would be to preprocess the entire sequence first, then determine its protein translation efficiency.
-
-I started off with scanning for start and stop codons, tracking the positions where they appeared. Valid potential reading frames that started and ended with in-frame start and stop codons (% 3 == 0) and had no in-frame stop codons inside were saved, then scanned for a Kozak motif. A Kozak motif generally looks like this "gccA/Gcc[AUG]G" around the [start codon] ATG / AUG (mRNA), where the capital letters represent the most important positions. It is a powerful predictor of translation initiation, so if you find it, there is a high chance protein translation will initiate immediately after. Generally, the largest ORF is the one that will encode the protein. By searching for the Kozak motif and getting the length of all potential ORFs, we can generate a score for each, where the highest-scoring ORF is one we can safely assume will encode the protein.
-
-### Motif Analysis Strategy
-The previous version focused on extracting predictive features relying on sequence conservation and direct protein structure disruption. However, I felt that it was missing a critical later: regulatory context.
-A variant in a highly conserved region might be benign if it doesn't disrupt any motifs contributing to regulatory logic, while a variant in another region could be pathogenic if it breaks a critical cluster / regulatory hub.
-The main challenge I found here was finding a way to accurately capture these effects on a scale, not just binary to really capture relevant, diverse biological signals.
-
-I chose to detect disruptions of a suite of motifs on both the DNA and protein level via Position Weight Matrices, which represent the degenerate nature of motifs in real biological systems.
-To further amplify the signals' biological meaning, I developed the toolkit with a Gaussian-weighted distance decay scoring mechanism combined with a cluster-composite scoring system. 
-This meant that disruptions to motifs occurring close the mutation site's window were scored higher than those further away. 
-
-Regulatory elements rarely function in isolation, in many cases breaking one regulatory site is less severe than compromising an entire regulatory hub, hence the implementation of a cluster composite scoring algorithm.
-Unlike simply counting motifs, this identifies synergistic disruption, when variants don't remove individual sites but break down coordinated regulatory 'clusters'.
-
-### Why HMM?
-Genomic domains can be interpreted through probabilistic zones with characteristic base compositions. While PWM's can detect whether a variant can hit a splice site, it might not be able to predict whether the local sequence's signature changes from Exon to Intron, which is biologically meaningful.
-The HMM analysis algorithms capture these subtle compositional shifts that position-based methods may miss. The multi-scale approach addresses the fact that some variants have various effect ranges, by capturing all of them.
-
-### Why Overhaul Microsatellite Detection? 
-The original module counted simple microsatellite frequency changes, which ended up being top 2 predictive signals for pathogenicity for almost every single project iteration. By going further in depth and analyzing not just how many but *how* these microsatellites changed and quantifying overall repeat instability changes, more meaningful biological signal was captured. This is reflected immensely in the feature importance analysis as all "tr" (Tandem Repeat) labelled features are at the top.
-
-
-### Flexible Multiprocessing
-Both CompositeDNA and CompositeProt were optimized with multiprocessing by initializing a multiprocessing pool upon class instantiation, terminating automatically when under a context manager (with xyz as CompositeDNA/Prot(core_num=max_cores-2)).
-This sped up protein analysis time from a predicted 8-9 hours to 1:30.
-What makes them flexible is that pool persistence is encoded into them, allowing for them to be loaded up once, many dataframes passed onto them for analysis, then terminated at will rather than automatically via a context manager. 
-This saved an immense amount of overhead in ReGen, where strings were constantly being altered and rerun through their fingerprinting pipelines for repeated predictions.
-
-### ReGen's Adaptive Logic
-A look at the config file or ReGen's logic will reveal a "retain_counter". What this is for is to keep track of the amount of times a mutation did not result in an increase in benignity. 
-Once this passes a config-defined threshold (retain_threshold), the variant will undergo a certain amount of random mutations, and the highest-scoring one is allowed to pass on under a more lenient error threshold.
-The threshold decreases as retain-count increases, becoming more lenient the more the variant demonstrates ridigity. This, combined with the stochastic mutations is designed to break through plateaus in performance, finding the mutation route around it.
-
-
-## [2] Installation and Workflow
+## [1] Installation and Workflow
 ### *Installation and Setup*
 - Go to the Releases Tab on the right hand side of this GitHub page
 - Download the latest release as a .zip file
@@ -217,12 +47,15 @@ Move all of those into the 'database' folder. Now we are ready to do your first 
 ### *Workflow*
 
 All of this is on 00_main.py.
+
 ```python
-from a01_KeyStone import KeyStone
-from a03_LookingGlass import LookingGlass
-from a04_ReGen import ReGen
+from src.gem.a01_KeyStone import KeyStone
+from src.gem.a03_LookingGlass import LookingGlass
+from src.gem.a04_ReGen import ReGen
 
 model_name = "TestRun_Model"
+
+
 # all functions with a name guard need to be called alone
 
 # [1] sourced data extraction and processing
@@ -236,7 +69,7 @@ def keystone_dataframe_processing(ml_modelname=model_name):
 
 # [2] feature extraction / engineering
 # note: call each of these sequentially, they each use a multiproc. if name == "__main__" guard like so:
-def keystone_extract_proteins(model = model_name):
+def keystone_extract_proteins(model=model_name):
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
@@ -247,7 +80,8 @@ def keystone_extract_proteins(model = model_name):
         print(f"Mutation Fingerprint Generation Failed: {e}")
         raise
 
-def ks_dna_profile(model = model_name):
+
+def ks_dna_profile(model=model_name):
     # 14 minutes
     test = KeyStone(model)
     try:
@@ -259,7 +93,8 @@ def ks_dna_profile(model = model_name):
         print(f"DNA Fingerprint Generation Failed: {e}")
         raise
 
-def ks_prot_profile(model = model_name):
+
+def ks_prot_profile(model=model_name):
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
@@ -270,12 +105,13 @@ def ks_prot_profile(model = model_name):
         print(f"Protein Fingerprint Generation Failed: {e}")
         raise
 
-def ks_dnamotif_profile(model = model_name):
+
+def ks_dnamotif_profile(model=model_name):
     # 1.5 hours
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
-            success  = test.generate_dnapwm_profile()
+            success = test.generate_dnapwm_profile()
             if success:
                 print("[PWM Profile Completed]")
     except Exception as e:
@@ -283,29 +119,31 @@ def ks_dnamotif_profile(model = model_name):
         raise
 
 
-def ks_domain_profile(model = model_name):
+def ks_domain_profile(model=model_name):
     # 1:50 hours
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
-            success  = test.generate_hmm_profile()
+            success = test.generate_hmm_profile()
             if success:
                 print("[HMM-domain Profile Completed]")
     except Exception as e:
         print(f"HMM-domain Fingerprint Generation Failed: {e}")
         raise
 
-def ks_aamotif_profile(model = model_name):
+
+def ks_aamotif_profile(model=model_name):
     # 30 minutes
     test = KeyStone(model)
     try:
         if __name__ == "__main__":
-            success  = test.generate_aapwm_profile()
+            success = test.generate_aapwm_profile()
             if success:
                 print("[PWM Profile Completed]")
     except Exception as e:
         print(f"PWM Fingerprint Generation Failed: {e}")
         raise
+
 
 # [3] Feature dataframe merging
 def keystone_merge(ml_modelname=model_name):
@@ -320,16 +158,19 @@ def keystone_merge(ml_modelname=model_name):
         print(f"Mutation Fingerprint Generation Failed: {e}")
         raise
 
+
 # [4] Model training and optimization
 def keystone_model_training(ml_modelname=model_name):
     # full run will take around 6 hours - latest optimized hyperparameters will be saved in model_name_stats.txt files
     test = KeyStone(ml_modelname)
     test.train_models()
 
+
 def LookingGlass_Demo(fasta_filename='test.fasta', ml_model=model_name, output_filename='Screen_test_1'):
     test_module = LookingGlass(fasta_filename, ml_model)
     if __name__ == "__main__":
         test_module.predict_file(output_filename)
+
 
 def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, outfile_name='benchmark_repair_test'):
     if __name__ == "__main__":
@@ -536,6 +377,132 @@ protein_gap_penalty: -8
 - Half Lives 
   - https://resources.qiagenbioinformatics.com/manuals/clcgenomicsworkbench/650/Estimated_half_life.html
 
+Lengthy technical breakdown of major modules below
+
+---
+
+## Technical Details
+**KeyStone: Integrating Database Querying, Bioinformatics Analyses and ML pipelines**
+
+*Extracts genomic context, generates both DNA and Protein-based biochemical + structural features, and trains optimized models for clinical variant interpretation*
+  - Data processing
+    - Quality Filtering: removes uncertain classifications and focuses on high-confidence Benign/Pathogenic variants
+    - Context Extraction: configurable flanking sequence windows around variants
+  - Feature Engineering is done through classes CompositeDNA, CompositeProt, DNAMatrix and ProtMatrix, elaborated on below
+  - Machine Learning Optimization and Evaluation
+    - XGB classifiers undergo Optuna hyperparameter tuning (pre-computed optimal settings provided in pipeline)
+    - Stratified k-fold validation, weighted sampling, threshold optimization
+    - ROC-AUC, PR-AUC, F1-scores, Confusion Matrices, and Reports on trained model provided in model_folder
+
+\
+**CompositeDNA: High-performance comprehensive DNA Analysis**
+
+*Conducts thorough DNA analyses to build a numerical profile on the following features:*
+- Sequence Alignment and Comparison
+  - Needleman-Wunsch global alignment, Smith-Waterman local alignment, Sequence identity and Coverage metrics
+- Structural Analysis
+  - Chromosome density
+  - Length changes
+  - Thermodynamic stability analysis using nearest-neighbour parameters
+  - GC content and CpG island disruption analysis 
+  - Shannon entropy for sequence complexity
+  - Hairpin structure prediction
+  - Intron detections
+- Mutation Detection
+  - SNV (Single Nucleotide Variant) identification
+  - Insertion / Deletion analysis with frameshift detection
+  - Tandem duplication discovery
+- Regulatory Element Analysis
+  - Transcription factor motif disruptions
+  - DNA instability motif analysis
+  - Start/stop codon changes
+
+\
+Most notable additions to CompositeDNA:
+
+**HMM Genomic Domain Analysis**
+
+*Predicts alterations to the genomic regulatory landscape through probabilistic state modeling*
+
+The HMM module translates DNA sequences into their optimized state paths using the Viterbi algorithm. From this optimized state path, it tracks:
+- **Domain Composition Shifts**: How variants change the proportion of coding, noncoding, regulatory, transcribable domains
+- **State Transition Disruptions**: Detection of domain boundary changes, Gaussian decay-weighted by proximity to mutation sites
+- **Multi-Scale Monitoring**: Three analysis windows capture local and broad domain effects
+
+**Repeat Instability Analysis - (Enhanced Microsatellite Detection)**
+
+Goes beyond repeat counting to capture biological mechanisms like expansions, contractions, and slippage-mediated mutagenesis
+- **Loci Tracking**: detects complete loss and gain of repeat regions
+- **Expansion / Contraction**: quantifies bp changes within existing repeat loci
+- **Weighted Scoring**: larger repeat units weighted more heavily
+- **Composite Scoring**: Integrates multiple disruption types to capture synergistic effects
+
+
+\
+**CompositeProt: High-performance comprehensive Amino-Acid Chain / Protein Analysis**
+
+*Performs smart ORF detection to uncover the highest-probability protein sequence upon which the following features are extracted:*
+- Translation and ORF Detection
+  - Intelligent Open Reading Frame identification
+  - Kozak motif sequence and ORF length-based scoring for translation efficiency
+  - Bidirectional sequence analysis (accounts for reverse complement)
+  - Ambiguous nucleotide handling
+- Physicochemical Properties
+  - Molecular weight calculations
+  - Net charge at physiological pH
+  - Isoelectric point determination
+  - Hydrophobicity changes
+  - Aliphatic index
+  - Protein half-life predictions
+- Structural Analysis
+  - Secondary structure propensity analysis (BioPython-aided)
+  - Proline content assessment
+  - Global and local protein sequence alignment with BLOSUM64 matrix
+- Feature Interaction Engineering includes:
+  - Composite scores combining multiple properties
+  - Interaction terms (e.g. charge-hydrophobicity)
+  - Relative metrics normalized by protein length
+
+\
+**DNAMatrix - regulatory motif analysis**
+
+*Captures how variants disrupt DNA-level regulatory architecture through multi-dimensional scoring of transcriptional and post-transcriptional control.*
+
+Scans variety of motifs found in 3 regulatory domains: 
+
+- initiation signals: initiator, TATA box, Kozak Sequence
+- transcription factors: CTCF, CAAT, SP1, NF-kB, AP1, CREB
+- post-transcriptional regulatory elements: 5’/3’ splice sites, branch points, polyadenylation signals
+
+Each motif is scored using position-weight matrices with a Gaussian-weighted distance decay function that assigns higher impact to disruptions near the variant site. The module calculates three complementary metrics across individual motif, domain, and total DNA levels:
+
+- raw motif count changes
+- position-weighted score shifts
+- cluster composite scores to detect synergistic effects when multiple binding sites are disrupted within close proximity. The distance threshold is configurable (30bp default).
+
+By aggregating individual motif disruptions into domain-level cluster scores, the system identifies coordinated regulatory breakdowns that simple count-based methods would miss. 
+
+\
+**ProtMatrix - protein motif analysis**
+
+*Extends variant impact assessment to the protein level, analyzing amino acid changes and disruptions in post-translational modification sites and protein-protein interaction domains. Profiles four major regulatory systems:*
+
+- phosphorylation sites: CDK, cAMP-PKA, CK2, Tyrosine Kinase
+- glycosylation sites: N-glycosylation consensus sequences
+- ubiquitination signals: D-box, KEN-box degrons
+- interaction domains: SH2 family, 14-3-3 binding sites, pdz domains, nuclear localization and export signals
+
+Since protein sequences are extrapolated without genomic coordinates but from translation likelihood calculations, the module employs PWM scanning combined with regex pattern matching for canonical motifs. Similar cluster composite scoring is implemented, capturing the disruption of spatially clustered PTM sites or binding domains.
+
+\
+**ReGen: Therapeutic Optimization**
+
+*Utilizes a sophisticated algorithm system to optimize variants towards benign classification*
+- Guided Evolution: intelligent sequence optimization using both guided and stochastic mutations
+- Multi-copy evolution: configurable parallel optimization of multiple sequence variants for balance between exploration / exploitation
+- Adaptive strategy: switches between guided and random mutations based on optimization progress
+- Comprehensive tracking: monitors the best variants per iteration and threshold-crossing variants
+- 
 
 
 Shield: [![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]

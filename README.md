@@ -179,7 +179,7 @@ def Repair_Gene(pathogenic_gene_file='benchmark_fasta', ml_model=model_name, out
 ```
 
 
-## [2.1] Model Stats: Clinical and Discriminator
+## [2] Model Stats: Clinical and Discriminator
 After conducting several hyperparameter runs I noticed that two configurations gave me peaks in performance for different use cases.
 Both models use identical feature sets but the difference is in XGBoost hyperparams. optimized via Optuna (settings in stats.txt files)
 
